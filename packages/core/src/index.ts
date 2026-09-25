@@ -4,7 +4,11 @@ export const utcTimestamp = z.iso.datetime({ offset: false });
 export const provider = z.string().regex(/^[a-z][a-z0-9_-]{1,31}$/);
 export const accountId = z.string().regex(/^[a-z][a-z0-9_-]{1,79}$/);
 export const fraction = z.number().finite().min(0).max(1);
-export const safeMetadata = z.record(z.string().max(40), z.union([z.string().max(200), z.number().finite(), z.boolean(), z.null()])).refine(value => JSON.stringify(value).length <= 1024, 'Metadata too large');
+export const safeMetadata = z.object({
+  demo:z.boolean().optional(), adapter_version:z.string().regex(/^[a-zA-Z0-9._-]{1,32}$/).optional(),
+  diagnostic_code:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/).optional(),
+  display_label:z.string().regex(/^[a-zA-Z0-9 ._/-]{1,80}$/).optional()
+}).strict();
 
 export const usageBucket = z.object({
   id: z.string().min(1).max(120),
@@ -12,6 +16,7 @@ export const usageBucket = z.object({
   kind: z.string().min(1).max(40),
   scope: z.string().min(1).max(80),
   unit: z.string().min(1).max(32),
+  window_seconds: z.number().int().positive().nullable().default(null),
   used: z.number().finite().nonnegative().nullable().default(null),
   limit: z.number().finite().positive().nullable().default(null),
   remaining: z.number().finite().nonnegative().nullable().default(null),

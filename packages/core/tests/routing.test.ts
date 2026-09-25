@@ -5,7 +5,7 @@ function account(id:string,session:number,weekly:number,overrides:Partial<Accoun
   return {id,provider:'anthropic',label:id,plan:null,enabled:true,capabilities:['coding'],model_classes:['high_reasoning'],priority:0,
     status:'available',freshness:'fresh',observed_at:'2026-09-24T08:58:00.000Z',latest_refresh_at:'2026-09-24T08:58:00.000Z',limits:
     [ ['session',session,'2026-09-24T10:00:00.000Z'],['weekly',weekly,'2026-09-28T00:00:00.000Z'] ].map(([kind,remaining,reset])=>({
-      id:String(kind),account_id:id,kind:String(kind),scope:'all_models',unit:'fraction',used:null,limit:null,remaining:null,
+      id:String(kind),account_id:id,kind:String(kind),scope:'all_models',unit:'fraction',window_seconds:null,used:null,limit:null,remaining:null,
       used_fraction:1-Number(remaining),remaining_fraction:Number(remaining),window_started_at:null,reset_at:String(reset),
       observed_at:'2026-09-24T08:58:00.000Z',source:'provider_ui',confidence:'provider_reported',metadata:{}})),...overrides};
 }
@@ -45,6 +45,6 @@ describe('routing',()=>{
     const snapshot={account_id:'account-a',provider:'anthropic',observed_at:bucket.observed_at,status:'ok',limits:[{...bucket,kind:'monthly'}]};
     expect(ingestSnapshot.safeParse(snapshot).success).toBe(true);
     expect(ingestSnapshot.safeParse({...snapshot,limits:[{...bucket,reset_at:'tomorrow'}]}).success).toBe(false);
-    expect(ingestSnapshot.safeParse({...snapshot,limits:[{...bucket,metadata:{html:'x'.repeat(2000)}}]}).success).toBe(false);
+    expect(ingestSnapshot.safeParse({...snapshot,limits:[{...bucket,metadata:{html:'<cookie>'}}]}).success).toBe(false);
   });
 });

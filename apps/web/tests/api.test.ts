@@ -10,7 +10,7 @@ const read='r'.repeat(40),write='w'.repeat(40);
 const account:AccountState={id:'claude-work',provider:'anthropic',label:'Claude Work',plan:'Team',enabled:true,
   capabilities:['coding'],model_classes:['high_reasoning'],priority:0,status:'available',freshness:'fresh',
   observed_at:new Date().toISOString(),latest_refresh_at:new Date().toISOString(),limits:[{
-    id:'session',account_id:'claude-work',kind:'session',scope:'all_models',unit:'fraction',used:null,limit:null,remaining:null,
+    id:'session',account_id:'claude-work',kind:'session',scope:'all_models',unit:'fraction',window_seconds:18000,used:null,limit:null,remaining:null,
     used_fraction:.28,remaining_fraction:.72,window_started_at:null,reset_at:new Date(Date.now()+3_600_000).toISOString(),
     observed_at:new Date().toISOString(),source:'provider_ui',confidence:'provider_reported',metadata:{}
   }]};

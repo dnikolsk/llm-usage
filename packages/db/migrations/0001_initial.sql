@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS usage_snapshots (
 CREATE INDEX IF NOT EXISTS snapshots_account_observed_idx ON usage_snapshots(account_id,observed_at);
 CREATE TABLE IF NOT EXISTS usage_buckets (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(), snapshot_id uuid NOT NULL REFERENCES usage_snapshots(id),
-  provider_bucket_id text NOT NULL, kind text NOT NULL, scope text NOT NULL, unit text NOT NULL,
+  provider_bucket_id text NOT NULL, kind text NOT NULL, scope text NOT NULL, unit text NOT NULL, window_seconds integer,
   used real, limit_value real, remaining real, used_fraction real, remaining_fraction real,
   window_started_at timestamptz, reset_at timestamptz, source text NOT NULL, confidence text NOT NULL,
   metadata jsonb NOT NULL DEFAULT '{}', UNIQUE(snapshot_id,provider_bucket_id)

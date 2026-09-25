@@ -12,8 +12,14 @@ Personal subscription capacity tracker with normalized usage snapshots and an ex
 
 Mock data is for local development only. Its reset timestamps are derived from run time and labeled `estimated`; real adapters must preserve provider-reported timestamps. The demo account IDs must exist before ingestion.
 
+The mock collector is a one-shot command. It does not install a five-minute scheduler or hold provider login sessions. The live Claude collector, Mac Keychain setup, and launchd job are next work after the backend is deployed and verified.
+
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 
 ## Deployment
 
 Connect `apps/web` as the Vercel project root, attach a Neon Postgres database, set `DATABASE_URL`, `READ_TOKEN`, and `WRITE_TOKEN`, run the migrations against that database, then deploy. Deployment is intentionally fail-closed without these values. Keep the write token only on the collector machine; read token is for trusted clients. No provider browser credentials belong in Vercel.
+
+## Mac mini handoff
+
+Extract the source archive into `~/Projects/llm-usage` (or your preferred Projects directory). It includes `.git` and the four implementation commits. From that directory run `pnpm install`, create a private GitHub repo named `llm-usage` using `gh repo create llm-usage --private --source=. --remote=origin --push`, and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The archive does not contain a deployed service or real provider adapter.

@@ -77,13 +77,14 @@ components:
   schemas:
     Bucket:
       type: object
-      required: [id, account_id, kind, scope, unit, used, limit, remaining, used_fraction, remaining_fraction, window_started_at, reset_at, observed_at, source, confidence, metadata]
+      required: [id, account_id, kind, scope, unit, window_seconds, used, limit, remaining, used_fraction, remaining_fraction, window_started_at, reset_at, observed_at, source, confidence, metadata]
       properties:
         id: {type: string}
         account_id: {type: string}
         kind: {type: string}
         scope: {type: string}
         unit: {type: string}
+        window_seconds: {type: [integer, 'null']}
         used: {type: [number, 'null']}
         limit: {type: [number, 'null']}
         remaining: {type: [number, 'null']}

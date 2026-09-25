@@ -16,7 +16,7 @@ export const usageSnapshots = pgTable('usage_snapshots', {
 }, t => [uniqueIndex('snapshots_idempotency_key_uq').on(t.idempotencyKey),index('snapshots_account_observed_idx').on(t.accountId,t.observedAt)]);
 export const usageBuckets = pgTable('usage_buckets', {
   id:uuid('id').primaryKey().defaultRandom(), snapshotId:uuid('snapshot_id').notNull().references(()=>usageSnapshots.id),
-  providerBucketId:text('provider_bucket_id').notNull(), kind:text('kind').notNull(), scope:text('scope').notNull(),unit:text('unit').notNull(),
+  providerBucketId:text('provider_bucket_id').notNull(), kind:text('kind').notNull(), scope:text('scope').notNull(),unit:text('unit').notNull(),windowSeconds:integer('window_seconds'),
   used:real('used'), limit:real('limit_value'), remaining:real('remaining'), usedFraction:real('used_fraction'),remainingFraction:real('remaining_fraction'),
   windowStartedAt:timestamp('window_started_at',{withTimezone:true}),resetAt:timestamp('reset_at',{withTimezone:true}),
   source:text('source').notNull(), confidence:text('confidence').notNull(),metadata:jsonb('metadata').$type<Record<string,unknown>>().notNull().default({})

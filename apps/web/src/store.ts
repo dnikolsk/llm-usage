@@ -17,7 +17,7 @@ export async function ingest(snapshot:IngestSnapshot,key:string):Promise<'create
         return existing?.payloadHash === hash ? 'duplicate':'conflict';
       }
       if (snapshot.limits.length) await tx.insert(usageBuckets).values(snapshot.limits.map(b=>({snapshotId:inserted.id,providerBucketId:b.id,
-        kind:b.kind,scope:b.scope,unit:b.unit,used:b.used,limit:b.limit,remaining:b.remaining,
+        kind:b.kind,scope:b.scope,unit:b.unit,windowSeconds:b.window_seconds,used:b.used,limit:b.limit,remaining:b.remaining,
         usedFraction:b.used_fraction,remainingFraction:b.remaining_fraction,windowStartedAt:b.window_started_at ? new Date(b.window_started_at):null,
         resetAt:b.reset_at ? new Date(b.reset_at):null,source:b.source,confidence:b.confidence,metadata:b.metadata})));
       return 'created';
@@ -39,7 +39,7 @@ export async function getStatus(now=new Date()) {
     const success=new Map(successful.map(s=>[s.accountId,s]));
     const states:AccountState[]=all.map(a=>{
       const s=success.get(a.id), n=newest.get(a.id), observed=s?.observedAt.toISOString() ?? null;
-      const limits:UsageBucket[]=s ? buckets.filter(b=>b.snapshotId===s.id).map(b=>({id:b.providerBucketId,account_id:a.id,kind:b.kind,scope:b.scope,unit:b.unit,
+      const limits:UsageBucket[]=s ? buckets.filter(b=>b.snapshotId===s.id).map(b=>({id:b.providerBucketId,account_id:a.id,kind:b.kind,scope:b.scope,unit:b.unit,window_seconds:b.windowSeconds,
         used:b.used,limit:b.limit,remaining:b.remaining,used_fraction:b.usedFraction,remaining_fraction:b.remainingFraction,
         window_started_at:b.windowStartedAt?.toISOString() ?? null,reset_at:b.resetAt?.toISOString() ?? null,
         observed_at:observed!,source:b.source as UsageBucket['source'],confidence:b.confidence as UsageBucket['confidence'],metadata:b.metadata as UsageBucket['metadata']})) : [];
