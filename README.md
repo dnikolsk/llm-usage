@@ -14,6 +14,8 @@ Mock data is for local development only. Its reset timestamps are derived from r
 
 The mock collector is a one-shot command. On a Mac, install Chromium with `pnpm --filter @llm-usage/collector exec playwright install chromium`. Set `LLM_USAGE_ACCOUNT_ID` to `claude-personal`, `cursor-personal`, or `chatgpt-personal` and run `pnpm --filter @llm-usage/collector <claude|cursor|chatgpt> login` to sign in to its dedicated browser profile. Set `LLM_USAGE_URL` to the deployed service URL and run the matching `sync` command. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`. Add the same write token used by Vercel to that Keychain item using Keychain Access. Profiles default to `~/.llm-usage/profiles/<account-id>`; never place them in Git. Collectors publish only normalized usage, never page HTML or credentials. These browser adapters still need validation against signed-in pages; a launchd job remains subsequent work. See [provider details](docs/providers.md).
 
+If you are already signed in to regular Chrome, use the [Chrome extension setup](docs/chrome-extension.md) instead of the isolated browser login commands. It reads only the usage tab you choose and never handles cookies. The extension can preview locally before the service is deployed.
+
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 
 ## Deployment

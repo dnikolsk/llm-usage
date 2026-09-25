@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "LLM Usage Collector",
+  "version": "0.1.0",
+  "description": "Read the visible usage page you choose; browser cookies stay in Chrome.",
+  "permissions": ["activeTab", "scripting", "nativeMessaging"],
+  "action": { "default_title": "LLM Usage Collector", "default_popup": "popup.html" }
+}

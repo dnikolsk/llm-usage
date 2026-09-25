@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font: 14px system-ui, sans-serif; width: 280px; margin: 16px; color: #242424; }
+    h1 { font-size: 16px; margin: 0 0 8px; }
+    p { line-height: 1.35; }
+    button { padding: 8px 12px; margin: 4px 6px 4px 0; }
+    #result { white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>LLM Usage Collector</h1>
+  <p>Open a Claude, Cursor, or ChatGPT usage page, then preview or sync its visible limits.</p>
+  <button id="preview">Preview</button><button id="sync">Sync</button>
+  <p id="result" role="status" aria-live="polite"></p>
+  <script src="popup.js"></script>
+</body>
+</html>
