@@ -1,0 +1,1 @@
+{"name":"@llm-usage/collector","version":"0.1.0","private":true,"type":"module","scripts":{"mock-sync":"tsx src/mock.ts","typecheck":"tsc -p tsconfig.json","lint":"tsc -p tsconfig.json","test":"vitest run --passWithNoTests"},"dependencies":{"@llm-usage/core":"workspace:*"},"devDependencies":{"tsx":"^4.20.0","@types/node":"^22.18.0"}}
