@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { ingestSnapshot } from '@llm-usage/core';
 import { collect, login } from './providers/anthropic/browser';
 import { publish } from './publish';
+import { loadWriteToken } from './write-token';
 
 const command = process.argv[2];
 const accountId = process.env.LLM_USAGE_ACCOUNT_ID;
@@ -14,7 +15,7 @@ if (profileDir === repoRoot || profileDir.startsWith(repoRoot + sep)) throw new 
 if (command === 'login') {
   await login(profileDir);
 } else if (command === 'sync') {
-  const token = process.env.LLM_USAGE_WRITE_TOKEN ?? '';
+  const token = await loadWriteToken();
   const baseUrl = process.env.LLM_USAGE_URL ?? 'http://localhost:3000';
   let snapshot;
   try { snapshot = await collect(profileDir, accountId); }
