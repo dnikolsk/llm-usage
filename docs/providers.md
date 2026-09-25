@@ -1,8 +1,13 @@
 # Providers
 
-The mock collector proves the normalized contract. The preferred OpenAI collector uses the installed Codex CLI's local app-server and its existing ChatGPT account authentication. Run `pnpm --filter @llm-usage/collector openai-cli preview` to inspect structured Work/Codex five-hour and weekly limits without any browser profile or cookie handling. After deployment, run `openai-cli sync` with `LLM_USAGE_URL` set. The CLI collector keeps reported reset timestamps in UTC and publishes only normalized snapshots. Missing meters become unknown buckets, so routing will not mistake absent measurements for free capacity.
+The mock collector proves the normalized contract. The preferred collectors reuse existing CLI sign-ins without browser profiles or cookie handling:
 
-Cursor [does not currently expose a public API or CLI command for individual subscription usage](https://forum.cursor.com/t/usage-api-cli-command/160967/5). Its Admin API is for teams and must not be confused with a personal subscription. Claude Code's `/usage` is interactive; no supported machine-readable personal quota source has been verified. Leave these accounts unknown in a browser-free setup rather than inferring capacity from token logs or API billing.
+- `claude-cli preview` invokes Claude Code's built-in `claude -p /usage` in an empty private directory and parses its session and all-model weekly percentages. The reset text is local-time prose, so `reset_at` stays unknown.
+- `openai-cli preview` reads structured Work/Codex five-hour and weekly limits from the installed Codex CLI's local app-server. It keeps reported reset timestamps in UTC.
+
+Run the matching `sync` command after deployment with `LLM_USAGE_URL` set. Both publish only normalized snapshots. Missing meters become unknown buckets, so routing will not mistake absent measurements for free capacity.
+
+Cursor [does not currently expose a public API or CLI command for individual subscription usage](https://forum.cursor.com/t/usage-api-cli-command/160967/5). Its Admin API is for teams and must not be confused with a personal subscription. The Cursor CLI can be signed in while still offering no personal quota reading. Leave Cursor capacity unknown in a browser-free setup rather than inferring it from token logs or API billing.
 
 The following browser collectors are experimental legacy adapters. They require dedicated local Chromium profiles and are not part of the recommended browser-free setup:
 

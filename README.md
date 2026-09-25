@@ -1,6 +1,6 @@
 # LLM Usage Tracker
 
-Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and browser-free OpenAI/Codex CLI collector are implemented. Experimental browser adapters remain available but are not the recommended authentication path. The iOS app is a subsequent phase.
+Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and browser-free Claude and OpenAI/Codex CLI collectors are implemented. Experimental browser adapters remain available but are not the recommended authentication path. The iOS app is a subsequent phase.
 
 ## Run locally
 
@@ -12,7 +12,7 @@ Personal subscription capacity tracker with normalized usage snapshots and an ex
 
 Mock data is for local development only. Its reset timestamps are derived from run time and labeled `estimated`; real adapters must preserve provider-reported timestamps. The demo account IDs must exist before ingestion.
 
-For an existing Codex CLI sign-in, `pnpm --filter @llm-usage/collector openai-cli preview` reads structured Work/Codex subscription limits without browser automation. Once the service is deployed, `LLM_USAGE_URL=https://YOUR-DEPLOYMENT pnpm --filter @llm-usage/collector openai-cli sync` publishes those normalized limits. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`. See [provider details](docs/providers.md) for the limits of personal Claude and Cursor collection.
+For existing CLI sign-ins, run `pnpm --filter @llm-usage/collector claude-cli preview` and `pnpm --filter @llm-usage/collector openai-cli preview` to read personal subscription limits without browser automation. Once the service is deployed, set `LLM_USAGE_URL=https://YOUR-DEPLOYMENT` and run the matching `sync` commands. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`. See [provider details](docs/providers.md) for Cursor's current limitation.
 
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 
@@ -22,4 +22,4 @@ Connect `apps/web` as the Vercel project root and attach a Neon Postgres databas
 
 ## Mac mini handoff
 
-Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The service is not yet deployed; the OpenAI CLI preview has been verified locally.
+Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The service is not yet deployed; both CLI previews have been verified locally.
