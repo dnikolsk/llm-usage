@@ -7,6 +7,8 @@ settings:
   base:
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1,2"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: S8BFJL8H9J
 targets:
   LLMUsage:
     type: application
