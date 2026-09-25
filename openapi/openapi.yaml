@@ -6,6 +6,49 @@ info:
 servers:
   - url: https://your-deployment.vercel.app
 paths:
+  /v1/widget/session:
+    post:
+      summary: Exchange the dashboard password for a 30-day widget read session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password: {type: string}
+      responses:
+        '200':
+          description: Signed session for the widget status endpoint
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [session, expires_at]
+                properties:
+                  session: {type: string}
+                  expires_at: {type: string, format: date-time}
+        '400': {description: Invalid JSON body}
+        '401': {description: Invalid dashboard password}
+        '503': {description: Dashboard password is not configured}
+  /v1/widget/status:
+    get:
+      summary: Read normalized status using a dashboard widget session
+      security: [{widgetSession: []}]
+      responses:
+        '200':
+          description: Status, including freshness and latest health
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [generated_at, accounts]
+                properties:
+                  generated_at: {type: string, format: date-time}
+                  accounts: {type: array, items: {$ref: '#/components/schemas/AccountState'}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {description: Status storage is unavailable}
   /v1/status:
     get:
       summary: All configured accounts and their latest successful buckets
@@ -72,6 +115,7 @@ components:
   securitySchemes:
     readToken: {type: http, scheme: bearer}
     writeToken: {type: http, scheme: bearer}
+    widgetSession: {type: http, scheme: bearer}
   responses:
     Unauthorized: {description: Missing or invalid role-specific bearer token}
   schemas:
