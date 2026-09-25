@@ -20,6 +20,12 @@ describe('Claude usage parsing', () => {
     expect(parseUsage('Please log in', accountId, observedAt)).toMatchObject({ status: 'error', limits: [] });
     expect(parseUsage('Weekly limits\nAll models\n150% used', accountId, observedAt).status).toBe('error');
   });
+  it('reads the current Claude page layout with a reset label before the weekly percentage', () => {
+    const result = parseUsage('Your usage\nCurrent session\nStarts with your first message\n0% used\nThis week\nResets Sunday 1:00 AM\n0% used\nResets\nUsage credits', accountId, observedAt);
+    expect(result.status).toBe('ok');
+    expect(result.limits.map(b => b.remaining_fraction)).toEqual([1, 1]);
+    expect(result.limits.every(b => b.reset_at === null)).toBe(true);
+  });
 });
 describe('collector publishing', () => {
   it('uses a stable idempotency key and requires HTTPS away from localhost', async () => {
