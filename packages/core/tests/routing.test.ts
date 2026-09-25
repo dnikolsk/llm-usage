@@ -47,4 +47,14 @@ describe('routing',()=>{
     expect(ingestSnapshot.safeParse({...snapshot,limits:[{...bucket,reset_at:'tomorrow'}]}).success).toBe(false);
     expect(ingestSnapshot.safeParse({...snapshot,limits:[{...bucket,metadata:{html:'<cookie>'}}]}).success).toBe(false);
   });
+  it('routes Cursor model pools independently when a model class is specified',()=>{
+    const cursor=account('cursor-personal',1,1,{provider:'cursor',model_classes:['cursor_models','other_models']});
+    cursor.limits=[
+      {...cursor.limits[0]!,id:'cursor-models',scope:'cursor_models',kind:'monthly',used_fraction:0,remaining_fraction:1},
+      {...cursor.limits[1]!,id:'other-models',scope:'other_models',kind:'monthly',used_fraction:1,remaining_fraction:0}
+    ];
+    expect(route([cursor],{now,capability:'coding',model_class:'cursor_models'}).recommended?.account_id).toBe('cursor-personal');
+    expect(route([cursor],{now,capability:'coding',model_class:'other_models'}).recommended).toBeNull();
+    expect(route([cursor],{now,capability:'coding'}).recommended).toBeNull();
+  });
 });

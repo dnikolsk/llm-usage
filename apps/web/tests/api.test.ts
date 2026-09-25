@@ -25,6 +25,8 @@ describe('HTTP contract',()=>{
   it('keeps read and write credentials separate',async()=>{
     expect((await STATUS(new Request('http://localhost/v1/status',{headers:{Authorization:`Bearer ${write}`}}))).status).toBe(401);
     expect((await POST(new Request('http://localhost/v1/ingest',{method:'POST',headers:{Authorization:`Bearer ${read}`}}))).status).toBe(401);
+    process.env.WRITE_TOKEN=read;
+    expect((await STATUS(new Request('http://localhost/v1/status',{headers:{Authorization:`Bearer ${read}`}}))).status).toBe(401);
   });
   it('returns normalized status in one call',async()=>{
     const res=await STATUS(new Request('http://localhost/v1/status',{headers:{Authorization:`Bearer ${read}`}}));
