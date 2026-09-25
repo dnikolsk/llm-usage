@@ -1,8 +1,10 @@
 # LLM Usage Tracker
 
-Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and Claude, Cursor, and OpenAI/Codex collectors are implemented. The iOS app is a subsequent phase.
+Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, Mac collectors, dashboard, and iOS app with small, medium, and large Home Screen widgets are implemented.
 
 The live site at [llm-usage.vercel.app](https://llm-usage.vercel.app) shows a private dashboard with account status, usage windows, and a coding recommendation. Log in with the dashboard password stored separately from the API tokens. Only normalized usage data reaches the service; provider sign-ins remain on the Mac.
+
+The [iOS app](ios/README.md) shows the same percentages and signs in using the dashboard password. The app exchanges that password for a 30-day read session shared with its widget; neither the password nor provider credentials are stored in the app.
 
 ## Run locally
 
