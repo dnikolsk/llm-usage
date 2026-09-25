@@ -1,6 +1,6 @@
 # LLM Usage Tracker
 
-Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and Claude, Cursor, and ChatGPT browser collectors are implemented. The iOS app is a subsequent phase.
+Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and browser-free OpenAI/Codex CLI collector are implemented. Experimental browser adapters remain available but are not the recommended authentication path. The iOS app is a subsequent phase.
 
 ## Run locally
 
@@ -12,9 +12,7 @@ Personal subscription capacity tracker with normalized usage snapshots and an ex
 
 Mock data is for local development only. Its reset timestamps are derived from run time and labeled `estimated`; real adapters must preserve provider-reported timestamps. The demo account IDs must exist before ingestion.
 
-The mock collector is a one-shot command. On a Mac, install Chromium with `pnpm --filter @llm-usage/collector exec playwright install chromium`. Set `LLM_USAGE_ACCOUNT_ID` to `claude-personal`, `cursor-personal`, or `chatgpt-personal` and run `pnpm --filter @llm-usage/collector <claude|cursor|chatgpt> login` to sign in to its dedicated browser profile. Set `LLM_USAGE_URL` to the deployed service URL and run the matching `sync` command. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`. Add the same write token used by Vercel to that Keychain item using Keychain Access. Profiles default to `~/.llm-usage/profiles/<account-id>`; never place them in Git. Collectors publish only normalized usage, never page HTML or credentials. These browser adapters still need validation against signed-in pages; a launchd job remains subsequent work. See [provider details](docs/providers.md).
-
-If you are already signed in to regular Chrome, use the [Chrome extension setup](docs/chrome-extension.md) instead of the isolated browser login commands. It reads only the usage tab you choose and never handles cookies. The extension can preview locally before the service is deployed.
+For an existing Codex CLI sign-in, `pnpm --filter @llm-usage/collector openai-cli preview` reads structured Work/Codex subscription limits without browser automation. Once the service is deployed, `LLM_USAGE_URL=https://YOUR-DEPLOYMENT pnpm --filter @llm-usage/collector openai-cli sync` publishes those normalized limits. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`. See [provider details](docs/providers.md) for the limits of personal Claude and Cursor collection.
 
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 
@@ -24,4 +22,4 @@ Connect `apps/web` as the Vercel project root and attach a Neon Postgres databas
 
 ## Mac mini handoff
 
-Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The repository does not yet contain a deployed service or a verified live provider integration.
+Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The service is not yet deployed; the OpenAI CLI preview has been verified locally.

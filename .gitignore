@@ -9,3 +9,4 @@ coverage/
 dist/
 .llm-usage/
 *.tsbuildinfo
+.DS_Store

@@ -1,6 +1,10 @@
 # Providers
 
-The mock collector proves the normalized contract. Each browser collector uses a dedicated local Chromium profile per account. Run `<provider> login` once, then `<provider> sync` as a one-shot refresh. Login and parsing stay on the Mac; only normalized snapshots reach the service. Missing meters become unknown buckets, so routing will not mistake absent measurements for free capacity. Reset times remain null until a reliable provider-reported UTC instant can be extracted. All adapters still need validation with signed-in pages and a scheduler.
+The mock collector proves the normalized contract. The preferred OpenAI collector uses the installed Codex CLI's local app-server and its existing ChatGPT account authentication. Run `pnpm --filter @llm-usage/collector openai-cli preview` to inspect structured Work/Codex five-hour and weekly limits without any browser profile or cookie handling. After deployment, run `openai-cli sync` with `LLM_USAGE_URL` set. The CLI collector keeps reported reset timestamps in UTC and publishes only normalized snapshots. Missing meters become unknown buckets, so routing will not mistake absent measurements for free capacity.
+
+Cursor [does not currently expose a public API or CLI command for individual subscription usage](https://forum.cursor.com/t/usage-api-cli-command/160967/5). Its Admin API is for teams and must not be confused with a personal subscription. Claude Code's `/usage` is interactive; no supported machine-readable personal quota source has been verified. Leave these accounts unknown in a browser-free setup rather than inferring capacity from token logs or API billing.
+
+The following browser collectors are experimental legacy adapters. They require dedicated local Chromium profiles and are not part of the recommended browser-free setup:
 
 - `claude` reads displayed session and weekly all-model percentages from Claude Settings → Usage.
 - `cursor` reads the separate monthly **Cursor Models** and **Other Models** included-usage pools from the [Spending dashboard](https://prod.cursor.com/help/models-and-usage/usage-limits). On-demand spend is excluded. A plan with only one pool will yield a partial observation until plan-aware absence is implemented.
