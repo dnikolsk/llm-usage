@@ -1,6 +1,6 @@
 # LLM Usage Tracker
 
-Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and browser-free Claude and OpenAI/Codex CLI collectors are implemented. Experimental browser adapters remain available but are not the recommended authentication path. The iOS app is a subsequent phase.
+Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and Claude and OpenAI/Codex CLI collectors are implemented. The iOS app is a subsequent phase.
 
 ## Run locally
 
@@ -18,7 +18,7 @@ Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` 
 
 ## Deployment
 
-Connect `apps/web` as the Vercel project root and attach a Neon Postgres database. The Neon integration supplies `DATABASE_URL`; store `READ_TOKEN` and `WRITE_TOKEN` as **sensitive Production environment variables** in Vercel. Generate independent random tokens of at least 32 characters. Run `vercel env run -e production -- pnpm db:migrate` from a linked checkout before deployment. Provision each real account with `vercel env run -e production -- pnpm --filter @llm-usage/db provision <account-id> anthropic '<label>' coding,chat high_reasoning`, adjusting the capability and model lists to match that account. Do not apply the demo seed to production. Deployment is intentionally fail-closed without these values or when the two tokens are identical. Store a copy of the write token in the collector Mac's Keychain and the read token only in trusted clients. Vercel cannot supply secrets directly to a Mac process. No provider browser credentials belong in Vercel.
+Connect `apps/web` as the Vercel project root and attach a Neon Postgres database. The Neon integration supplies `DATABASE_URL`; store `READ_TOKEN` and `WRITE_TOKEN` as **sensitive Production environment variables** in Vercel. Generate independent random tokens of at least 32 characters. Run `vercel env run -e production -- pnpm db:migrate` from a linked checkout before deployment. Provision each real account with `vercel env run -e production -- pnpm --filter @llm-usage/db provision <account-id> anthropic '<label>' coding,chat high_reasoning`, adjusting the capability and model lists to match that account. Do not apply the demo seed to production. Deployment is intentionally fail-closed without these values or when the two tokens are identical. Store a copy of the write token in the collector Mac's Keychain and the read token only in trusted clients. Vercel cannot supply secrets directly to a Mac process. Provider CLI credentials stay on the Mac.
 
 ## Mac mini handoff
 
