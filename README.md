@@ -1,6 +1,6 @@
 # LLM Usage Tracker
 
-Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and first Claude browser collector are implemented. The iOS app is a subsequent phase.
+Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and Claude, Cursor, and ChatGPT browser collectors are implemented. The iOS app is a subsequent phase.
 
 ## Run locally
 
@@ -12,7 +12,7 @@ Personal subscription capacity tracker with normalized usage snapshots and an ex
 
 Mock data is for local development only. Its reset timestamps are derived from run time and labeled `estimated`; real adapters must preserve provider-reported timestamps. The demo account IDs must exist before ingestion.
 
-The mock collector is a one-shot command. For Claude collection on a Mac, install Chromium with `pnpm --filter @llm-usage/collector exec playwright install chromium`. Set `LLM_USAGE_ACCOUNT_ID=claude-personal` and run `pnpm --filter @llm-usage/collector claude login` to sign in to the dedicated browser profile. Set `LLM_USAGE_URL` to the deployed service URL and run `pnpm --filter @llm-usage/collector claude sync`. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`. Add the same write token used by Vercel to that Keychain item using Keychain Access. Repeat with `claude-work` for a separate account and profile. Profiles default to `~/.llm-usage/profiles/<account-id>`; never place them in Git. The collector reads displayed session and all-model weekly percentages, leaves ambiguous reset times unknown, and reports parsing or browser failures without uploading page HTML. It has not yet been verified against a signed-in Claude page. A launchd job remains subsequent work.
+The mock collector is a one-shot command. On a Mac, install Chromium with `pnpm --filter @llm-usage/collector exec playwright install chromium`. Set `LLM_USAGE_ACCOUNT_ID` to `claude-personal`, `cursor-personal`, or `chatgpt-personal` and run `pnpm --filter @llm-usage/collector <claude|cursor|chatgpt> login` to sign in to its dedicated browser profile. Set `LLM_USAGE_URL` to the deployed service URL and run the matching `sync` command. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`. Add the same write token used by Vercel to that Keychain item using Keychain Access. Profiles default to `~/.llm-usage/profiles/<account-id>`; never place them in Git. Collectors publish only normalized usage, never page HTML or credentials. These browser adapters still need validation against signed-in pages; a launchd job remains subsequent work. See [provider details](docs/providers.md).
 
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 
