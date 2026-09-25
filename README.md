@@ -14,6 +14,8 @@ Mock data is for local development only. Its reset timestamps are derived from r
 
 For existing CLI sign-ins, run `pnpm --filter @llm-usage/collector claude-cli preview` and `pnpm --filter @llm-usage/collector openai-cli preview` to read personal subscription limits without browser automation. `pnpm --filter @llm-usage/collector cursor-cli preview` checks Cursor authentication; its personal quota remains unavailable. Once the service is deployed, set `LLM_USAGE_URL=https://YOUR-DEPLOYMENT` and run the matching `sync` commands. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`. See [provider details](docs/providers.md) for Cursor's current limitation.
 
+On the collector Mac, run `zsh collector/scripts/install-launch-agent.sh` to sync all three accounts every five minutes while logged in. The LaunchAgent reads the CLI sign-ins and write token locally; its plist contains no credentials. Logs are under `~/.llm-usage/`. Reinstall the agent after moving the repository.
+
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 
 ## Deployment
@@ -22,4 +24,4 @@ Connect `apps/web` as the Vercel project root and attach a Neon Postgres databas
 
 ## Mac mini handoff
 
-Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The service is not yet deployed; both CLI previews have been verified locally.
+Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The service is live at [llm-usage.vercel.app](https://llm-usage.vercel.app); authenticated ingestion from all three Mac CLI collectors has been verified.
