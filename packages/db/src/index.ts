@@ -1,0 +1,9 @@
+import postgres from 'postgres';
+import { drizzle } from 'drizzle-orm/postgres-js';
+export * from './schema';
+export function connect() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error('DATABASE_URL is required');
+  const client = postgres(url,{max:3,prepare:false});
+  return { db:drizzle(client), client };
+}
