@@ -1,8 +1,8 @@
 # LLM Usage Tracker
 
-Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and Claude, Cursor, and OpenAI/Codex CLI collectors are implemented. The iOS app is a subsequent phase.
+Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and Claude, Cursor, and OpenAI/Codex collectors are implemented. The iOS app is a subsequent phase.
 
-The live site at [llm-usage.vercel.app](https://llm-usage.vercel.app) shows a private dashboard with account status, usage windows, and a coding recommendation. Log in with the dashboard password stored separately from the API tokens. Only normalized usage data reaches the service; provider CLI sign-ins remain on the Mac.
+The live site at [llm-usage.vercel.app](https://llm-usage.vercel.app) shows a private dashboard with account status, usage windows, and a coding recommendation. Log in with the dashboard password stored separately from the API tokens. Only normalized usage data reaches the service; provider sign-ins remain on the Mac.
 
 ## Run locally
 
@@ -14,9 +14,9 @@ The live site at [llm-usage.vercel.app](https://llm-usage.vercel.app) shows a pr
 
 Mock data is for local development only. Its reset timestamps are derived from run time and labeled `estimated`; real adapters must preserve provider-reported timestamps. The demo account IDs must exist before ingestion.
 
-For existing CLI sign-ins, run `pnpm --filter @llm-usage/collector claude-cli preview` and `pnpm --filter @llm-usage/collector openai-cli preview` to read personal subscription limits without browser automation. `pnpm --filter @llm-usage/collector cursor-cli preview` checks Cursor authentication; its personal quota remains unavailable. Once the service is deployed, set `LLM_USAGE_URL=https://YOUR-DEPLOYMENT` and run the matching `sync` commands. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`. See [provider details](docs/providers.md) for Cursor's current limitation.
+For existing sign-ins, run `pnpm --filter @llm-usage/collector claude-cli preview`, `pnpm --filter @llm-usage/collector openai-cli preview`, and `pnpm --filter @llm-usage/collector cursor-cli preview` to read personal subscription limits without browser automation. Cursor uses its desktop app sign-in and an undocumented usage endpoint; see [provider details](docs/providers.md). Once the service is deployed, set `LLM_USAGE_URL=https://YOUR-DEPLOYMENT` and run the matching `sync` commands. The collector reads `LLM_USAGE_WRITE_TOKEN` when set, otherwise looks up a macOS Keychain generic password with service `llm-usage-write-token` and account `llm-usage`.
 
-On the collector Mac, run `zsh collector/scripts/install-launch-agent.sh` to sync all three accounts every five minutes while logged in. The LaunchAgent reads the CLI sign-ins and write token locally; its plist contains no credentials. Logs are under `~/.llm-usage/`. Reinstall the agent after moving the repository.
+On the collector Mac, run `zsh collector/scripts/install-launch-agent.sh` to sync all three accounts every five minutes while logged in. The LaunchAgent reads the provider sign-ins and write token locally; its plist contains no credentials. Logs are under `~/.llm-usage/`. Reinstall the agent after moving the repository.
 
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 

@@ -25,6 +25,8 @@ function age(iso: string | null, now: Date): string {
   return minutes < 1 ? 'Just now' : minutes < 60 ? `${minutes} min ago` : `${Math.floor(minutes / 60)} hr ago`;
 }
 function limitName(bucket: UsageBucket): string {
+  if (bucket.scope === 'cursor_models') return 'Cursor Models';
+  if (bucket.scope === 'other_models') return 'Other Models';
   if (bucket.kind === 'session' && bucket.window_seconds === 18_000) return '5-hour window';
   if (bucket.kind === 'session') return 'Current session';
   if (bucket.kind === 'weekly') return 'Weekly window';
@@ -96,7 +98,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
   return <main className="dashboard-shell"><div className="dashboard-width">
     <header className="site-header"><div className="brand"><span className="brand-mark">◈</span><span>LLM <b>USAGE</b></span></div>
       <div className="header-actions"><a href="/" className="refresh-link">↻ <span>Refresh</span></a><form action="/dashboard/logout" method="post"><button type="submit" className="signout-button">Sign out</button></form></div></header>
-    <section className="hero"><div className="hero-copy"><div className="eyebrow"><span className="eyebrow-line" /> PERSONAL USAGE DASHBOARD</div><h1>Know what’s<br /><em>available.</em></h1><p>Live subscription capacity from the CLIs signed in on your Mac mini.</p></div>
+    <section className="hero"><div className="hero-copy"><div className="eyebrow"><span className="eyebrow-line" /> PERSONAL USAGE DASHBOARD</div><h1>Know what’s<br /><em>available.</em></h1><p>Live subscription capacity from your Mac mini sign-ins.</p></div>
       <div className="hero-aside"><div className="pulse-dot" /><span>SYNCING EVERY 5 MIN</span><strong>{data ? `${data.accounts.length} accounts connected` : 'Service unavailable'}</strong><small>Updated {latestUpdate ? time(latestUpdate) : '—'}</small></div></section>
     <section className="overview" aria-label="Overview">
       <div className="overview-item"><span className="overview-label">CODING PICK</span><strong>{codingPick ?? 'No fresh recommendation'}</strong><small>Based on measured capacity and routing reserves</small></div>
