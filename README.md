@@ -1,6 +1,6 @@
 # LLM Usage Tracker
 
-Personal subscription capacity tracker with normalized usage snapshots and an explainable router. This first implementation pass provides the backend and a mock collector. The Claude browser adapter and iOS app are subsequent phases.
+Personal subscription capacity tracker with normalized usage snapshots and an explainable router. The backend, mock collector, and first Claude browser collector are implemented. The iOS app is a subsequent phase.
 
 ## Run locally
 
@@ -12,7 +12,7 @@ Personal subscription capacity tracker with normalized usage snapshots and an ex
 
 Mock data is for local development only. Its reset timestamps are derived from run time and labeled `estimated`; real adapters must preserve provider-reported timestamps. The demo account IDs must exist before ingestion.
 
-The mock collector is a one-shot command. It does not install a five-minute scheduler or hold provider login sessions. The live Claude collector, Mac Keychain setup, and launchd job are next work after the backend is deployed and verified.
+The mock collector is a one-shot command. For Claude collection on a Mac, install Chromium with `pnpm --filter @llm-usage/collector exec playwright install chromium`. Set `LLM_USAGE_ACCOUNT_ID=claude-personal` and run `pnpm --filter @llm-usage/collector claude login` to sign in to the dedicated browser profile. Set `LLM_USAGE_URL` and `LLM_USAGE_WRITE_TOKEN`, then run `pnpm --filter @llm-usage/collector claude sync`. Repeat with `claude-work` for a separate account and profile. Profiles default to `~/.llm-usage/profiles/<account-id>`; never place them in Git. The collector reads displayed session and all-model weekly percentages, leaves ambiguous reset times unknown, and reports parsing or browser failures without uploading page HTML. It has not yet been verified against a signed-in Claude page. Keychain setup and a launchd job remain subsequent work.
 
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 
@@ -22,4 +22,4 @@ Connect `apps/web` as the Vercel project root, attach a Neon Postgres database, 
 
 ## Mac mini handoff
 
-Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The repository does not yet contain a deployed service or real provider adapter.
+Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The repository does not yet contain a deployed service or a verified live provider integration.
