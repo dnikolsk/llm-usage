@@ -1,0 +1,137 @@
+openapi: 3.1.0
+info:
+  title: LLM Usage Tracker API
+  version: 0.1.0
+  description: Single-owner normalized subscription usage and explainable routing.
+servers:
+  - url: https://your-deployment.vercel.app
+paths:
+  /v1/status:
+    get:
+      summary: All configured accounts and their latest successful buckets
+      security: [{readToken: []}]
+      responses:
+        '200':
+          description: Status, including freshness and latest health
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [generated_at, accounts]
+                properties:
+                  generated_at: {type: string, format: date-time}
+                  accounts: {type: array, items: {$ref: '#/components/schemas/AccountState'}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /v1/route:
+    get:
+      summary: Deterministic capacity recommendation and all candidate inputs
+      security: [{readToken: []}]
+      parameters:
+        - {name: capability, in: query, schema: {type: string}}
+        - {name: model_class, in: query, schema: {type: string}}
+      responses:
+        '200':
+          description: Recommendation or null when no candidate is eligible
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [generated_at, recommended, reason, alternatives, candidates]
+                properties:
+                  generated_at: {type: string, format: date-time}
+                  recommended:
+                    oneOf:
+                      - {type: 'null'}
+                      - {type: object, required: [account_id, provider], properties: {account_id: {type: string}, provider: {type: string}}}
+                  reason: {type: [object, 'null'], additionalProperties: true}
+                  alternatives: {type: array, items: {type: object, additionalProperties: true}}
+                  candidates: {type: array, items: {$ref: '#/components/schemas/Candidate'}}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+  /v1/ingest:
+    post:
+      summary: Append a complete observation for a provisioned account
+      security: [{writeToken: []}]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, minLength: 16, maxLength: 128}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/Snapshot'}
+      responses:
+        '201': {description: Created}
+        '200': {description: Identical retry}
+        '400': {description: Invalid payload}
+        '404': {description: Account not provisioned or provider mismatch}
+        '409': {description: Idempotency key reused for a different payload}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+components:
+  securitySchemes:
+    readToken: {type: http, scheme: bearer}
+    writeToken: {type: http, scheme: bearer}
+  responses:
+    Unauthorized: {description: Missing or invalid role-specific bearer token}
+  schemas:
+    Bucket:
+      type: object
+      required: [id, account_id, kind, scope, unit, used, limit, remaining, used_fraction, remaining_fraction, window_started_at, reset_at, observed_at, source, confidence, metadata]
+      properties:
+        id: {type: string}
+        account_id: {type: string}
+        kind: {type: string}
+        scope: {type: string}
+        unit: {type: string}
+        used: {type: [number, 'null']}
+        limit: {type: [number, 'null']}
+        remaining: {type: [number, 'null']}
+        used_fraction: {type: [number, 'null'], minimum: 0, maximum: 1}
+        remaining_fraction: {type: [number, 'null'], minimum: 0, maximum: 1}
+        window_started_at: {type: [string, 'null'], format: date-time}
+        reset_at: {type: [string, 'null'], format: date-time}
+        observed_at: {type: string, format: date-time}
+        source: {enum: [provider_ui, official_api, local_collector, manual, estimated]}
+        confidence: {enum: [exact, provider_reported, estimated, unknown]}
+        metadata: {type: object}
+    Snapshot:
+      type: object
+      required: [account_id, provider, observed_at, status, limits]
+      properties:
+        account_id: {type: string}
+        provider: {type: string}
+        observed_at: {type: string, format: date-time}
+        status: {enum: [ok, partial, error]}
+        limits: {type: array, items: {$ref: '#/components/schemas/Bucket'}}
+        metadata: {type: object}
+    AccountState:
+      type: object
+      required: [id, provider, label, enabled, capabilities, model_classes, status, freshness, observed_at, latest_refresh_at, limits]
+      properties:
+        id: {type: string}
+        provider: {type: string}
+        label: {type: string}
+        plan: {type: [string, 'null']}
+        enabled: {type: boolean}
+        capabilities: {type: array, items: {type: string}}
+        model_classes: {type: array, items: {type: string}}
+        status: {enum: [available, partial, error, unknown]}
+        freshness: {enum: [fresh, stale, seriously_stale, unknown]}
+        observed_at: {type: [string, 'null'], format: date-time}
+        latest_refresh_at: {type: [string, 'null'], format: date-time}
+        limits: {type: array, items: {$ref: '#/components/schemas/Bucket'}}
+    Candidate:
+      type: object
+      required: [account_id, provider, eligible, exclusions, bottleneck_remaining, usable_capacity, next_reset_at, freshness_seconds, reset_soon, priority]
+      properties:
+        account_id: {type: string}
+        provider: {type: string}
+        eligible: {type: boolean}
+        exclusions: {type: array, items: {type: string}}
+        bottleneck_remaining: {type: [number, 'null']}
+        usable_capacity: {type: [number, 'null']}
+        next_reset_at: {type: [string, 'null'], format: date-time}
+        freshness_seconds: {type: [integer, 'null']}
+        reset_soon: {type: boolean}
+        priority: {type: integer}
