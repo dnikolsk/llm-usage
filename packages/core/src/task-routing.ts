@@ -50,6 +50,17 @@ export type TaskCandidate = Candidate & {
   estimated_need: number;
   continuation: boolean;
 };
+// Account-level row for accounts with no routable task model, so POST explains every non-winner like GET.
+export type TaskAccountCandidate = Candidate & {
+  model_id: null; model_label: null; model_class: null; tier: null;
+  pace_surplus: null; estimated_need: number; continuation: boolean;
+};
+
+// Difficulty at or above this Jev score requires an advanced-tier model, regardless of local or cloud placement.
+export const ADVANCED_DIFFICULTY = 1.75;
+// Jev confidence below which a warning is added, and below which cloud placement is refused.
+export const LOW_CONFIDENCE_WARNING = 0.6;
+export const MIN_CLOUD_CONFIDENCE = 0.5;
 
 function relevantBuckets(account: AccountState, modelClass: string) {
   return account.limits.filter(bucket => bucket.scope === 'all_models' || bucket.scope === modelClass);
@@ -82,9 +93,10 @@ export function recommendTask(accounts: AccountState[], request: TaskRouteReques
   const policy = options.policy ?? defaultPolicy;
   const size = request.estimated_work ?? sizeFromJudgment(judgment.workSize);
   const need = minimumCapacity(size);
-  const advanced = judgment.difficulty >= 1.75;
-  const current = request.project?.stage === 'ongoing' ? request.project.current_account_id : undefined;
-  const candidates: TaskCandidate[] = accounts.flatMap(account => (models[account.provider] ?? [])
+  const advanced = judgment.difficulty >= ADVANCED_DIFFICULTY;
+  const ongoing = request.project?.stage === 'ongoing' ? request.project : undefined;
+  const current = ongoing?.current_account_id;
+  const modelCandidates: TaskCandidate[] = accounts.flatMap(account => (models[account.provider] ?? [])
     .filter(model => account.model_classes.includes(model.model_class))
     .map(model => {
       const continuation = account.id === current && (!request.project?.current_model || request.project.current_model === model.id);
@@ -107,8 +119,17 @@ export function recommendTask(accounts: AccountState[], request: TaskRouteReques
         tier: model.tier, pace_surplus: paceSurplus(account, model.model_class, now),
         estimated_need: need, continuation };
     }));
+  const accountCandidates: TaskAccountCandidate[] = accounts
+    .filter(account => !modelCandidates.some(candidate => candidate.account_id === account.id))
+    .map(account => {
+      const candidate = route([account], { capability: request.capability, now, policy }).candidates[0]!;
+      return { ...candidate, eligible: false, exclusions: [...new Set([...candidate.exclusions, 'model_class_unsupported'])],
+        model_id: null, model_label: null, model_class: null, tier: null, pace_surplus: null,
+        estimated_need: need, continuation: account.id === current };
+    });
+  const candidates: (TaskCandidate | TaskAccountCandidate)[] = [...modelCandidates, ...accountCandidates];
 
-  const eligible = candidates.filter(candidate => candidate.eligible).sort((a, b) => {
+  const eligible = modelCandidates.filter(candidate => candidate.eligible).sort((a, b) => {
     if (a.continuation !== b.continuation) return a.continuation ? -1 : 1;
     if (!advanced && a.tier !== b.tier) return a.tier === 'general' ? -1 : 1;
     if (size === 'large') {
@@ -125,11 +146,20 @@ export function recommendTask(accounts: AccountState[], request: TaskRouteReques
   const winner = eligible[0];
   const needsMac = request.needs_mac ?? judgment.needsMac >= 0.7;
   const interactive = request.interaction_level ? request.interaction_level === 'high' : judgment.interactive >= 0.7;
-  const execution = needsMac || interactive || !request.repo_pushed || size !== 'large' ? 'local' : 'cloud';
+  const lowConfidence = (limit: number) => judgment.confidence !== null && judgment.confidence < limit;
+  // The reason names the rule that decided placement; cloud-only gates are reported only when cloud was in play.
   const executionReason = needsMac ? 'mac_dependencies' : interactive ? 'interactive_work'
-    : !request.repo_pushed ? 'repository_not_ready_for_cloud' : size !== 'large' ? 'short_or_medium_work' : 'unattended_large_job';
+    : size === 'quick' ? 'quick_local' : size === 'medium' ? 'short_or_medium_work'
+    : !request.repo_pushed ? 'repository_not_ready_for_cloud'
+    : lowConfidence(MIN_CLOUD_CONFIDENCE) ? 'low_jev_confidence' : 'unattended_large_job';
+  const execution = executionReason === 'unattended_large_job' ? 'cloud' : 'local';
+  const continuityWarning = !ongoing || (!current && !ongoing.current_model) ? null
+    : !current || !accounts.some(account => account.id === current) ? 'continuity_account_unknown'
+    : ongoing.current_model && !modelCandidates.some(candidate => candidate.continuation) ? 'continuity_model_unknown'
+    : !winner?.continuation ? 'continuity_ineligible' : null;
   const warnings = [
-    ...(judgment.confidence !== null && judgment.confidence < 0.6 ? ['low_jev_confidence'] : []),
+    ...(lowConfidence(LOW_CONFIDENCE_WARNING) ? ['low_jev_confidence'] : []),
+    ...(continuityWarning ? [continuityWarning] : []),
     ...(winner && winner.pace_surplus === null ? ['renewal_pace_unknown'] : [])
   ];
 
@@ -143,7 +173,8 @@ export function recommendTask(accounts: AccountState[], request: TaskRouteReques
       account_id: winner.account_id, model_id: winner.model_id, task: request.task } : null,
     reason: winner ? { project_continuity: winner.continuation, estimated_work: size,
       estimated_need: need, difficulty: judgment.difficulty, usable_capacity: winner.usable_capacity,
-      pace_surplus: winner.pace_surplus, execution_reason: executionReason,
+      pace_surplus: winner.pace_surplus, quality_floor: advanced ? 'advanced' : 'general',
+      execution_reason: executionReason,
       jev_model: judgment.model, jev_confidence: judgment.confidence } : null,
     alternatives: eligible.slice(1).map(candidate => ({ account_id: candidate.account_id,
       provider: candidate.provider, model_id: candidate.model_id, model_label: candidate.model_label })),

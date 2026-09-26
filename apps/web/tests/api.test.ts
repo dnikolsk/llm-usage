@@ -63,6 +63,37 @@ describe('HTTP contract',()=>{
     expect(body.reason.project_continuity).toBe(true);
     expect(body.decision_source).toBe('jev');
   });
+  it('rejects empty, too-short, and unauthenticated task routes (G7, G8)',async()=>{
+    const url='http://localhost/v1/route';
+    const post=(body:unknown,auth=true)=>TASK_ROUTE(new Request(url,{method:'POST',
+      headers:auth?{Authorization:`Bearer ${read}`}:{},body:JSON.stringify(body)}));
+    for (const task of ['','hi there']) {
+      const res=await post({task});
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({error:'invalid_request'});
+    }
+    const res=await post({task:'Fix a typo in the README title'},false);
+    expect(res.status).toBe(401);
+    expect((await TASK_ROUTE(new Request(url,{method:'POST',headers:{Authorization:`Bearer ${write}`},
+      body:JSON.stringify({task:'Fix a typo in the README title'})}))).status).toBe(401);
+    expect(evaluateTask).not.toHaveBeenCalled();
+  });
+  it('explains exhausted peers and refuses cloud on low Jev confidence (G3, G9)',async()=>{
+    const exhausted=(id:string,provider:string,model_classes:string[])=>({...account,id,provider,model_classes,
+      limits:account.limits.map(b=>({...b,account_id:id,remaining_fraction:0,used_fraction:1}))});
+    vi.mocked(getStatus).mockResolvedValue({generated_at:new Date().toISOString(),accounts:[account,
+      exhausted('cursor-personal','cursor',['general']),exhausted('chatgpt-personal','openai',['work_codex'])]});
+    vi.mocked(evaluateTask).mockResolvedValue({difficulty:1.9,workSize:1.9,interactive:.1,needsMac:.1,model:'jev-test',confidence:.28});
+    const res=await TASK_ROUTE(new Request('http://localhost/v1/route',{method:'POST',headers:{Authorization:`Bearer ${read}`},
+      body:JSON.stringify({task:'Build a new multi-screen application',estimated_work:'large',interaction_level:'low',
+        needs_mac:false,repo_pushed:true})}));
+    const body=await res.json();
+    expect(body.recommended).toMatchObject({account_id:'claude-work',model_id:'claude-opus',execution:'local'});
+    expect(body.handoff).toBeNull();
+    expect(body.warnings).toContain('low_jev_confidence');
+    for (const id of ['cursor-personal','chatgpt-personal'])
+      expect(body.candidates.find((c:{account_id:string})=>c.account_id===id).exclusions).toContain('exhausted');
+  });
   it('reports Jev unavailability instead of pretending a deterministic choice used Jev',async()=>{
     vi.mocked(evaluateTask).mockRejectedValueOnce(new JevUnavailable('down'));
     const res=await TASK_ROUTE(new Request('http://localhost/v1/route',{method:'POST',headers:{Authorization:`Bearer ${read}`},

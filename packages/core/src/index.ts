@@ -126,5 +126,5 @@ export function route(accounts: AccountState[], options: { capability?: string; 
     alternatives:eligible.slice(1).map(({account_id,provider})=>({account_id,provider})), candidates };
 }
 
-export { taskRouteRequest, recommendTask } from './task-routing';
-export type { TaskRouteRequest, TaskJudgment, TaskCandidate } from './task-routing';
+export { taskRouteRequest, recommendTask, ADVANCED_DIFFICULTY, LOW_CONFIDENCE_WARNING, MIN_CLOUD_CONFIDENCE } from './task-routing';
+export type { TaskRouteRequest, TaskJudgment, TaskCandidate, TaskAccountCandidate } from './task-routing';
