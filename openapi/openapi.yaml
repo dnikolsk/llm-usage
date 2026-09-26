@@ -136,10 +136,43 @@ components:
             account_id: {type: string}
             model_id: {type: string}
             task: {type: string}
-        reason: {type: [object, 'null'], additionalProperties: true}
+        reason:
+          type: [object, 'null']
+          properties:
+            project_continuity: {type: boolean}
+            estimated_work: {enum: [quick, medium, large]}
+            estimated_need: {type: number}
+            difficulty: {type: number}
+            usable_capacity: {type: [number, 'null']}
+            pace_surplus: {type: [number, 'null']}
+            quality_floor:
+              enum: [general, advanced]
+              description: advanced when Jev difficulty >= 1.75, for local and cloud alike; general-tier models then carry quality_below_task.
+            execution_reason:
+              enum: [mac_dependencies, interactive_work, quick_local, short_or_medium_work, repository_not_ready_for_cloud, low_jev_confidence, unattended_large_job]
+              description: The rule that decided placement. Only unattended_large_job yields execution=cloud, and it requires Jev confidence >= 0.5.
+            jev_model: {type: string}
+            jev_confidence: {type: [number, 'null']}
         alternatives: {type: array, items: {type: object, additionalProperties: true}}
-        candidates: {type: array, items: {type: object, additionalProperties: true}}
-        warnings: {type: array, items: {type: string}}
+        candidates: {type: array, items: {$ref: '#/components/schemas/TaskCandidate'}}
+        warnings:
+          type: array
+          description: low_jev_confidence (confidence < 0.6), continuity_account_unknown, continuity_model_unknown, continuity_ineligible, renewal_pace_unknown.
+          items: {type: string}
+    TaskCandidate:
+      description: One row per account and task model. Accounts without a routable task model appear once with null model fields, eligible=false, and model_class_unsupported among their exclusions.
+      allOf:
+        - {$ref: '#/components/schemas/Candidate'}
+        - type: object
+          required: [model_id, model_label, model_class, tier, pace_surplus, estimated_need, continuation]
+          properties:
+            model_id: {type: [string, 'null']}
+            model_label: {type: [string, 'null']}
+            model_class: {type: [string, 'null']}
+            tier: {enum: [general, advanced, null]}
+            pace_surplus: {type: [number, 'null']}
+            estimated_need: {type: number}
+            continuation: {type: boolean}
     Bucket:
       type: object
       required: [id, account_id, kind, scope, unit, window_seconds, used, limit, remaining, used_fraction, remaining_fraction, window_started_at, reset_at, observed_at, source, confidence, metadata]
