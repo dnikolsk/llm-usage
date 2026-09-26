@@ -1,10 +1,12 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import type { AccountState } from '@llm-usage/core';
 vi.mock('../src/store',()=>({ingest:vi.fn(),getStatus:vi.fn(),getPolicy:vi.fn()}));
+vi.mock('../src/jev',()=>({evaluateTask:vi.fn(),JevUnavailable:class extends Error {}}));
 import { ingest,getStatus,getPolicy } from '../src/store';
+import { evaluateTask, JevUnavailable } from '../src/jev';
 import { POST } from '../app/v1/ingest/route';
 import { GET as STATUS } from '../app/v1/status/route';
-import { GET as ROUTE } from '../app/v1/route/route';
+import { GET as ROUTE, POST as TASK_ROUTE } from '../app/v1/route/route';
 
 const read='r'.repeat(40),write='w'.repeat(40);
 const account:AccountState={id:'claude-work',provider:'anthropic',label:'Claude Work',plan:'Team',enabled:true,
@@ -19,6 +21,7 @@ beforeEach(()=>{
   vi.mocked(getStatus).mockResolvedValue({generated_at:new Date().toISOString(),accounts:[account]});
   vi.mocked(getPolicy).mockResolvedValue({reserves:{session:.1,weekly:.15}});
   vi.mocked(ingest).mockResolvedValue('created');
+  vi.mocked(evaluateTask).mockResolvedValue({difficulty:1,workSize:1,interactive:.2,needsMac:.1,model:'jev-test',confidence:.9});
 });
 afterEach(()=>{vi.clearAllMocks();delete process.env.READ_TOKEN;delete process.env.WRITE_TOKEN;});
 describe('HTTP contract',()=>{
@@ -40,6 +43,32 @@ describe('HTTP contract',()=>{
     expect(data.recommended.account_id).toBe('claude-work');
     expect(data.alternatives).toEqual([{account_id:'claude-personal',provider:'anthropic'}]);
     expect(data.reason.policy_reserves.weekly).toBe(.15);
+  });
+  it('requires a read token and a valid task before calling Jev',async()=>{
+    const url='http://localhost/v1/route';
+    expect((await TASK_ROUTE(new Request(url,{method:'POST',body:JSON.stringify({task:'Fix the dashboard layout'})}))).status).toBe(401);
+    expect((await TASK_ROUTE(new Request(url,{method:'POST',headers:{Authorization:`Bearer ${read}`},
+      body:JSON.stringify({task:'short'})}))).status).toBe(400);
+    expect(evaluateTask).not.toHaveBeenCalled();
+  });
+  it('returns a task-aware app, model and execution recommendation',async()=>{
+    const res=await TASK_ROUTE(new Request('http://localhost/v1/route',{method:'POST',
+      headers:{Authorization:`Bearer ${read}`,'Content-Type':'application/json'},
+      body:JSON.stringify({task:'Continue the dashboard implementation',project:{stage:'ongoing',current_account_id:'claude-work'},
+        interaction_level:'high',needs_mac:true,capability:'coding'})}));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    const body=await res.json();
+    expect(body.recommended).toMatchObject({account_id:'claude-work',model_id:'claude-sonnet',execution:'local'});
+    expect(body.reason.project_continuity).toBe(true);
+    expect(body.decision_source).toBe('jev');
+  });
+  it('reports Jev unavailability instead of pretending a deterministic choice used Jev',async()=>{
+    vi.mocked(evaluateTask).mockRejectedValueOnce(new JevUnavailable('down'));
+    const res=await TASK_ROUTE(new Request('http://localhost/v1/route',{method:'POST',headers:{Authorization:`Bearer ${read}`},
+      body:JSON.stringify({task:'Build a substantial new feature'})}));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({error:'jev_unavailable'});
   });
   it('rejects malformed payload before touching the database',async()=>{
     const res=await POST(new Request('http://localhost/v1/ingest',{method:'POST',headers:{Authorization:`Bearer ${write}`,'Idempotency-Key':'valid-key-1234567','Content-Type':'application/json'},body:JSON.stringify({account_id:'claude-work',html:'<cookie>'})}));

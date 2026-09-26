@@ -47,6 +47,24 @@ paths:
                   alternatives: {type: array, items: {type: object, additionalProperties: true}}
                   candidates: {type: array, items: {$ref: '#/components/schemas/Candidate'}}
         '401': {$ref: '#/components/responses/Unauthorized'}
+    post:
+      summary: Jev-assisted task recommendation with app, model, and local/cloud placement
+      description: Jev judges task difficulty and work pattern. The service applies measured capacity, renewal pace, quality, and continuity rules. It recommends cloud work but does not launch it.
+      security: [{readToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TaskRouteRequest'}
+      responses:
+        '200':
+          description: Recommendation, reasons, alternatives, candidate exclusions, and optional cloud handoff
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TaskRouteResponse'}
+        '400': {description: Invalid request}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {description: Usage storage or Jev is unavailable}
   /v1/ingest:
     post:
       summary: Append a complete observation for a provisioned account
@@ -75,6 +93,53 @@ components:
   responses:
     Unauthorized: {description: Missing or invalid role-specific bearer token}
   schemas:
+    TaskRouteRequest:
+      type: object
+      additionalProperties: false
+      required: [task]
+      properties:
+        task: {type: string, minLength: 12, maxLength: 4000}
+        project:
+          type: object
+          additionalProperties: false
+          required: [stage]
+          properties:
+            stage: {enum: [new, ongoing]}
+            current_account_id: {type: string}
+            current_model: {type: string}
+        estimated_work: {enum: [quick, medium, large]}
+        interaction_level: {enum: [low, high]}
+        needs_mac: {type: boolean}
+        repo_pushed: {type: boolean}
+        capability: {type: string, default: coding}
+    TaskRouteResponse:
+      type: object
+      required: [generated_at, decision_source, recommended, handoff, reason, alternatives, candidates, warnings]
+      properties:
+        generated_at: {type: string, format: date-time}
+        decision_source: {const: jev}
+        recommended:
+          type: [object, 'null']
+          properties:
+            account_id: {type: string}
+            provider: {type: string}
+            model_id: {type: string}
+            model_label: {type: string}
+            model_class: {type: string}
+            execution: {enum: [local, cloud]}
+        handoff:
+          type: [object, 'null']
+          description: Cloud recommendation only; no job has been launched.
+          properties:
+            status: {const: not_started}
+            provider: {type: string}
+            account_id: {type: string}
+            model_id: {type: string}
+            task: {type: string}
+        reason: {type: [object, 'null'], additionalProperties: true}
+        alternatives: {type: array, items: {type: object, additionalProperties: true}}
+        candidates: {type: array, items: {type: object, additionalProperties: true}}
+        warnings: {type: array, items: {type: string}}
     Bucket:
       type: object
       required: [id, account_id, kind, scope, unit, window_seconds, used, limit, remaining, used_fraction, remaining_fraction, window_started_at, reset_at, observed_at, source, confidence, metadata]

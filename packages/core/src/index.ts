@@ -125,3 +125,6 @@ export function route(accounts: AccountState[], options: { capability?: string; 
       policy_reserves:policy.reserves } : null,
     alternatives:eligible.slice(1).map(({account_id,provider})=>({account_id,provider})), candidates };
 }
+
+export { taskRouteRequest, recommendTask } from './task-routing';
+export type { TaskRouteRequest, TaskJudgment, TaskCandidate } from './task-routing';
