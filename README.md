@@ -20,6 +20,17 @@ On the collector Mac, run `zsh collector/scripts/install-launch-agent.sh` to syn
 
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 
+## MCP connector
+
+[`packages/mcp`](packages/mcp) is a read-only stdio MCP server (`@llm-usage/mcp`, bin `llm-usage-mcp`) that calls the deployed API. It exposes three tools: `status` (`GET /v1/status`), `route` (`GET /v1/route`, requires `capability`), and `route_task` (`POST /v1/route`, task-aware). It has no write or ingest tools, and a cloud `handoff` is only a recommendation. Set `LLM_USAGE_READ_TOKEN` (required) and optionally `LLM_USAGE_BASE_URL` (default `https://llm-usage.vercel.app`), then run:
+
+```sh
+pnpm install
+LLM_USAGE_READ_TOKEN=<read token> node "$PWD/packages/mcp/bin/llm-usage-mcp.mjs"
+```
+
+See [the package README](packages/mcp/README.md) for Cursor, Claude, and Grok Bot configuration.
+
 ## Deployment
 
 Connect `apps/web` as the Vercel project root and attach a Neon Postgres database. The Neon integration supplies `DATABASE_URL`; store `READ_TOKEN`, `WRITE_TOKEN`, an independent `DASHBOARD_PASSWORD`, and `TYPESAFE_API_KEY` as **sensitive Production environment variables** in Vercel. Generate independent random values of at least 32 characters for the three service secrets, and obtain the Jev key from TypeSafe. Run `vercel env run -e production -- pnpm db:migrate` from a linked checkout before deployment. Provision each real account with `vercel env run -e production -- pnpm --filter @llm-usage/db provision <account-id> anthropic '<label>' coding,chat high_reasoning`, adjusting the capability and model lists to match that account. Do not apply the demo seed to production. API access is intentionally fail-closed without its values or when the two tokens are identical; dashboard login remains unavailable without its password. Store a copy of the write token in the collector Mac's Keychain and the read token only in trusted clients. Vercel cannot supply secrets directly to a Mac process. Provider CLI credentials stay on the Mac.
