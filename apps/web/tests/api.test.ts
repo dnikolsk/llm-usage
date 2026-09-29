@@ -82,7 +82,7 @@ describe('HTTP contract',()=>{
     const exhausted=(id:string,provider:string,model_classes:string[])=>({...account,id,provider,model_classes,
       limits:account.limits.map(b=>({...b,account_id:id,remaining_fraction:0,used_fraction:1}))});
     vi.mocked(getStatus).mockResolvedValue({generated_at:new Date().toISOString(),accounts:[account,
-      exhausted('cursor-personal','cursor',['general']),exhausted('chatgpt-personal','openai',['work_codex'])]});
+      exhausted('cursor-personal','cursor',['cursor_models','other_models']),exhausted('chatgpt-personal','openai',['work_codex'])]});
     vi.mocked(evaluateTask).mockResolvedValue({difficulty:1.9,workSize:1.9,interactive:.1,needsMac:.1,model:'jev-test',confidence:.28});
     const res=await TASK_ROUTE(new Request('http://localhost/v1/route',{method:'POST',headers:{Authorization:`Bearer ${read}`},
       body:JSON.stringify({task:'Build a new multi-screen application',estimated_work:'large',interaction_level:'low',

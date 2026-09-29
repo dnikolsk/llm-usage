@@ -67,3 +67,38 @@ describe('routing',()=>{
     expect(result.candidates.find(c => c.account_id === 'gemini-api-personal')?.exclusions).toEqual(expect.arrayContaining(['disabled']));
   });
 });
+
+describe('GET provider win matrix (aligned classes)', () => {
+  function exhaust(a: AccountState): AccountState {
+    return { ...a, limits: a.limits.map(b => ({ ...b, remaining_fraction: 0, used_fraction: 1 })) };
+  }
+  function providerAccount(id: string, provider: string, classes: string[], scope: string, remaining = 0.9): AccountState {
+    const base = account(id, remaining, remaining, { provider, model_classes: classes });
+    base.limits = base.limits.map(b => ({ ...b, scope, kind: provider === 'cursor' ? 'monthly' : b.kind }));
+    return base;
+  }
+  const claude = () => providerAccount('claude-personal', 'anthropic', ['high_reasoning'], 'all_models');
+  const cursor = () => providerAccount('cursor-personal', 'cursor', ['cursor_models', 'other_models'], 'cursor_models');
+  const chatgpt = () => providerAccount('chatgpt-personal', 'openai', ['work_codex'], 'work_codex');
+  const google = () => providerAccount('google-ai-pro-personal', 'google', ['gemini_apps'], 'gemini_apps');
+
+  it('Claude wins GET once when peers are exhausted', () => {
+    const result = route([claude(), exhaust(cursor()), exhaust(chatgpt()), exhaust(google())], { now, capability: 'coding' });
+    expect(result.recommended).toMatchObject({ account_id: 'claude-personal', provider: 'anthropic' });
+  });
+  it('Cursor wins GET once when peers are exhausted', () => {
+    const result = route([exhaust(claude()), cursor(), exhaust(chatgpt()), exhaust(google())],
+      { now, capability: 'coding', model_class: 'cursor_models' });
+    expect(result.recommended).toMatchObject({ account_id: 'cursor-personal', provider: 'cursor' });
+  });
+  it('ChatGPT wins GET once when peers are exhausted', () => {
+    const result = route([exhaust(claude()), exhaust(cursor()), chatgpt(), exhaust(google())],
+      { now, capability: 'coding', model_class: 'work_codex' });
+    expect(result.recommended).toMatchObject({ account_id: 'chatgpt-personal', provider: 'openai' });
+  });
+  it('Google wins GET once when peers are exhausted', () => {
+    const result = route([exhaust(claude()), exhaust(cursor()), exhaust(chatgpt()), google()],
+      { now, capability: 'coding', model_class: 'gemini_apps' });
+    expect(result.recommended).toMatchObject({ account_id: 'google-ai-pro-personal', provider: 'google' });
+  });
+});

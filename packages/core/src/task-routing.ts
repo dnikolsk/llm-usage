@@ -32,8 +32,9 @@ const models: Record<string, ModelOption[]> = {
     { id: 'claude-opus', label: 'Claude Opus', model_class: 'high_reasoning', tier: 'advanced' }
   ],
   openai: [
-    { id: 'gpt-6-sol', label: 'GPT-6 Sol', model_class: 'high_reasoning', tier: 'general' },
-    { id: 'gpt-6-astra', label: 'GPT-6 Astra', model_class: 'high_reasoning', tier: 'advanced' }
+    // Collector + inventory use work_codex (Work/Codex allowance), not high_reasoning.
+    { id: 'gpt-6-sol', label: 'GPT-6 Sol', model_class: 'work_codex', tier: 'general' },
+    { id: 'gpt-6-astra', label: 'GPT-6 Astra', model_class: 'work_codex', tier: 'advanced' }
   ],
   cursor: [
     { id: 'cursor-auto', label: 'Cursor Auto', model_class: 'cursor_models', tier: 'general' },

@@ -12,6 +12,10 @@ Cursor [does not currently expose a public API or CLI command for individual sub
 
 The OpenAI collector measures only the Work/Codex subscription allowance, [shared across those products](https://help.openai.com/fr-ca/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex). It does not represent ordinary chat-message limits, API billing, or purchased credits. Its bucket scope is `work_codex`. Provision that model class for a class-filtered route; an account tagged only `general` will not match it.
 
+Task routing maps OpenAI models (`gpt-6-sol`, `gpt-6-astra`) to model class `work_codex` so `route_task` matches the collector. Do not retag ChatGPT as `high_reasoning` unless you also change that map.
+
+Cursor personal accounts must be provisioned with model classes `cursor_models,other_models` (matching the desktop current-period pools). An account tagged only `general` is invisible to `route_task` because the task model map uses those pool names, not `general`.
+
 - `google-cli preview` measures the **Google AI Pro subscription** (Gemini Apps / Antigravity Gemini-model group), not Gemini API usage or Cloud billing. It runs the signed-in Antigravity CLI on the Mac (`agy -p '/usage' --output-format json`) and parses five-hour and weekly remaining fractions from the Gemini Models group only. Claude/GPT groups from the same response are ignored. Gemini API keys (`GEMINI_API_KEY`, AI Studio, pay-as-you-go) are ignored. If the Mac session is missing or expired, the snapshot is `error` with `sign_in_required` so a human can sign in to Gemini/Antigravity on the mini.
 
 Account id `google-ai-pro-personal`, provider `google`, bucket scope `gemini_apps`. Do not provision a Gemini API account in this inventory.
