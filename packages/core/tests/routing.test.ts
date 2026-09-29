@@ -57,4 +57,13 @@ describe('routing',()=>{
     expect(route([cursor],{now,capability:'coding',model_class:'other_models'}).recommended).toBeNull();
     expect(route([cursor],{now,capability:'coding'}).recommended).toBeNull();
   });
+
+  it('routes Google AI Pro independently of a Gemini API-shaped account', () => {
+    const pro = account('google-ai-pro-personal', .8, .8, {provider:'google', model_classes:['gemini_apps']});
+    pro.limits = pro.limits.map(limit => ({...limit, scope:'gemini_apps'}));
+    const api = account('gemini-api-personal', .99, .99, {provider:'google-api', enabled:false, model_classes:['api_billing']});
+    const result = route([pro, api], {now, capability:'coding'});
+    expect(result.recommended?.account_id).toBe('google-ai-pro-personal');
+    expect(result.candidates.find(c => c.account_id === 'gemini-api-personal')?.exclusions).toEqual(expect.arrayContaining(['disabled']));
+  });
 });

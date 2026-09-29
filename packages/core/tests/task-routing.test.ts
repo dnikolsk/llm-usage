@@ -81,6 +81,19 @@ describe('task-aware routing', () => {
     expect(recommendTask([cursor], { task: 'Make a small UI adjustment', capability: 'coding' }, judgment, { now }).recommended).toBeNull();
   });
 
+  it('treats Google AI Pro as a Gemini Apps subscription route, not API billing', () => {
+    const google = account('google-ai-pro-personal', 'google', 0.9, 2, 3);
+    google.model_classes = ['gemini_apps'];
+    google.limits[0]!.scope = 'gemini_apps';
+    const result = recommendTask([google], { task: 'Draft a Gemini chat reply for review', capability: 'coding' }, judgment, { now });
+    expect(result.recommended).toMatchObject({ account_id: 'google-ai-pro-personal', provider: 'google', model_id: 'gemini-flash' });
+    expect(result.candidates.map(c => c.model_id).sort()).toEqual(['gemini-flash', 'gemini-pro']);
+    const hard = recommendTask([google], { task: 'Implement a large reasoning-heavy refactor', estimated_work: 'large',
+      capability: 'coding', needs_mac: true }, { ...judgment, difficulty: 2.2 }, { now });
+    expect(hard.recommended?.model_id).toBe('gemini-pro');
+    expect(hard.candidates.find(c => c.model_id === 'gemini-flash')?.exclusions).toContain('quality_below_task');
+  });
+
   it('requires a bounded, structured task request', () => {
     expect(taskRouteRequest.safeParse({ task: 'Fix the login form', project: { stage: 'new' } }).success).toBe(true);
     expect(taskRouteRequest.safeParse({ task: 'too short', secret: 'unexpected' }).success).toBe(false);

@@ -38,6 +38,10 @@ const models: Record<string, ModelOption[]> = {
   cursor: [
     { id: 'cursor-auto', label: 'Cursor Auto', model_class: 'cursor_models', tier: 'general' },
     { id: 'cursor-other-models', label: 'Cursor Other Models', model_class: 'other_models', tier: 'general' }
+  ],
+  google: [
+    { id: 'gemini-flash', label: 'Gemini Flash', model_class: 'gemini_apps', tier: 'general' },
+    { id: 'gemini-pro', label: 'Gemini Pro', model_class: 'gemini_apps', tier: 'advanced' }
   ]
 };
 

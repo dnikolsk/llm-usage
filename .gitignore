@@ -10,3 +10,4 @@ dist/
 .llm-usage/
 *.tsbuildinfo
 .DS_Store
+antigravity-oauth-token

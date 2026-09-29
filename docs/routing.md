@@ -20,11 +20,11 @@ Filter enabled accounts, capability/model class, health, freshness, bucket exhau
 
 Jev makes four narrow judgments in one call: difficulty, work size, likely interactivity, and whether Mac resources are needed. Explicit caller fields override inferred work size, interactivity, or Mac dependency. The service applies hard eligibility and quality checks in code, then prefers an ongoing project's current account and model when it can finish the estimated work. A quick continuation can use a small reserved tail, but never an exhausted or stale bucket. For new short work, a positive renewal-pace surplus is favored; large work requires more headroom. These fractional work estimates are heuristics, not token forecasts.
 
-`project.current_account_id` must be an inventory id from `GET /v1/status` (for example `claude-personal`, `cursor-personal`, `chatgpt-personal`), and `current_model` a task model id (`claude-sonnet`, `claude-opus`, `gpt-6-sol`, `gpt-6-astra`, `cursor-auto`, `cursor-other-models`).
+`project.current_account_id` must be an inventory id from `GET /v1/status` (for example `claude-personal`, `cursor-personal`, `chatgpt-personal`, `google-ai-pro-personal`), and `current_model` a task model id (`claude-sonnet`, `claude-opus`, `gpt-6-sol`, `gpt-6-astra`, `cursor-auto`, `cursor-other-models`, `gemini-flash`, `gemini-pro`).
 
 ### Quality floor
 
-One rule applies to every task, whether it runs on the Mac or in the cloud: when Jev difficulty is **≥ 1.75** (on its 0–3 scale), only `advanced`-tier models (`claude-opus`, `gpt-6-astra`) are eligible and general-tier rows carry `quality_below_task`. Below 1.75, general-tier models are preferred everywhere, so the same large task may be recommended Sonnet on the Mac and Sonnet in the cloud, never Sonnet on one and Opus on the other. `reason.quality_floor` reports `advanced` or `general`.
+One rule applies to every task, whether it runs on the Mac or in the cloud: when Jev difficulty is **≥ 1.75** (on its 0–3 scale), only `advanced`-tier models (`claude-opus`, `gpt-6-astra`, `gemini-pro`) are eligible and general-tier rows carry `quality_below_task`. Below 1.75, general-tier models are preferred everywhere, so the same large task may be recommended Sonnet on the Mac and Sonnet in the cloud, never Sonnet on one and Opus on the other. `reason.quality_floor` reports `advanced` or `general`.
 
 ### Placement
 
