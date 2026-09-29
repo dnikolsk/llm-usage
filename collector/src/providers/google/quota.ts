@@ -1,10 +1,8 @@
-import { readFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { ingestSnapshot, type IngestSnapshot } from '@llm-usage/core';
 
-const codeAssistBase = 'https://daily-cloudcode-pa.googleapis.com/v1internal';
-const tokenPath = join(homedir(), '.gemini', 'antigravity-cli', 'antigravity-oauth-token');
+const execFileAsync = promisify(execFile);
 
 export const googleAccountId = 'google-ai-pro-personal';
 export const googleProvider = 'google';
@@ -20,6 +18,9 @@ type QuotaBucket = {
 };
 type QuotaGroup = { displayName?: unknown; buckets?: unknown };
 type QuotaSummary = { groups?: unknown };
+
+export type AgyRunnerResult = { stdout: string; stderr?: string };
+export type AgyRunner = () => Promise<AgyRunnerResult>;
 
 function remainingFraction(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
@@ -120,72 +121,111 @@ export function parseQuotaText(text: string, accountId: string, observedAt: stri
   }, accountId, observedAt);
 }
 
-function accessTokenFromAuth(raw: unknown): string | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const auth = raw as Record<string, unknown>;
-  const nested = auth.token && typeof auth.token === 'object' ? auth.token as Record<string, unknown> : auth;
-  const token = nested.access_token ?? nested.AccessToken ?? auth.access_token;
-  return typeof token === 'string' && token.length > 20 ? token : null;
-}
-
-export async function readLocalAccessToken(
-  path = tokenPath,
-  reader: (file: string) => Promise<string> = (file) => readFile(file, 'utf8')
-): Promise<string | null> {
-  try {
-    const parsed = JSON.parse(await reader(path)) as unknown;
-    return accessTokenFromAuth(parsed);
-  } catch {
-    return null;
+function pickString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value;
   }
+  return undefined;
 }
 
-async function codeAssist(method: string, payload: Record<string, unknown>, token: string, fetcher: typeof fetch): Promise<unknown> {
-  const response = await fetcher(`${codeAssistBase}:${method}`, {
-    method: 'POST', signal: AbortSignal.timeout(15_000),
-    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify(payload)
+/** Normalize agy snake_case / `name` fields into the camelCase shape parseQuotaSummary expects. */
+export function normalizeAgyUsage(raw: unknown): QuotaSummary | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const root = raw as Record<string, unknown>;
+  const command = root.command && typeof root.command === 'object' ? root.command as Record<string, unknown> : null;
+  const data = command?.data && typeof command.data === 'object'
+    ? command.data as Record<string, unknown>
+    : root.data && typeof root.data === 'object'
+      ? root.data as Record<string, unknown>
+      : root;
+  if (command && command.name !== undefined && command.name !== 'usage') return null;
+  const groupsRaw = Array.isArray(data.groups) ? data.groups : null;
+  if (!groupsRaw) return null;
+  const groups = groupsRaw.flatMap((group): QuotaGroup[] => {
+    if (!group || typeof group !== 'object') return [];
+    const record = group as Record<string, unknown>;
+    const displayName = pickString(record.displayName, record.name);
+    const bucketsRaw = Array.isArray(record.buckets) ? record.buckets : [];
+    const buckets = bucketsRaw.flatMap((item): QuotaBucket[] => {
+      if (!item || typeof item !== 'object') return [];
+      const bucket = item as Record<string, unknown>;
+      return [{
+        bucketId: pickString(bucket.bucketId, bucket.id),
+        displayName: pickString(bucket.displayName, bucket.name),
+        window: bucket.window,
+        remainingFraction: bucket.remainingFraction ?? bucket.remaining_fraction,
+        resetTime: bucket.resetTime ?? bucket.reset_time,
+        disabled: bucket.disabled
+      }];
+    });
+    return [{ displayName, buckets }];
   });
-  if (response.status === 401 || response.status === 403) throw Object.assign(new Error('token_expired'), { diagnostic: 'token_expired' });
-  if (!response.ok) throw new Error(`quota_request_failed_${response.status}`);
-  return await response.json() as unknown;
+  return { groups };
+}
+
+function isAuthFailure(text: string): boolean {
+  const lower = text.toLowerCase();
+  return lower.includes('not logged')
+    || lower.includes('authentication required')
+    || lower.includes('sign in')
+    || lower.includes('signin')
+    || lower.includes('not signed in')
+    || lower.includes('unauthorized')
+    || lower.includes('login required');
+}
+
+function errorText(error: unknown): string {
+  if (!error || typeof error !== 'object') return String(error ?? '');
+  const record = error as { message?: unknown; stdout?: unknown; stderr?: unknown };
+  return [record.message, record.stdout, record.stderr].map(value => typeof value === 'string' ? value : '').join('\n');
+}
+
+function errorSnapshot(accountId: string, observedAt: string, diagnostic: string): IngestSnapshot {
+  return ingestSnapshot.parse({
+    account_id: accountId, provider: googleProvider, observed_at: observedAt,
+    status: 'error', limits: [], metadata: { diagnostic_code: diagnostic }
+  });
+}
+
+async function defaultAgyRunner(): Promise<AgyRunnerResult> {
+  const result = await execFileAsync('agy', ['-p', '/usage', '--output-format', 'json', '--print-timeout', '45s'], {
+    timeout: 60_000,
+    maxBuffer: 262_144,
+    encoding: 'utf8',
+    env: process.env
+  });
+  return { stdout: result.stdout, stderr: result.stderr };
 }
 
 export async function collect(
   accountId: string,
-  options: {
-    tokenPath?: string;
-    reader?: (file: string) => Promise<string>;
-    fetcher?: typeof fetch;
-  } = {}
+  options: { runner?: AgyRunner } = {}
 ): Promise<IngestSnapshot> {
   const observedAt = new Date().toISOString();
-  const token = await readLocalAccessToken(options.tokenPath ?? tokenPath, options.reader);
-  if (!token) {
-    return ingestSnapshot.parse({
-      account_id: accountId, provider: googleProvider, observed_at: observedAt,
-      status: 'error', limits: [], metadata: { diagnostic_code: 'sign_in_required' }
-    });
-  }
-  const fetcher = options.fetcher ?? fetch;
+  const runner = options.runner ?? defaultAgyRunner;
+  let stdout = '';
+  let stderr = '';
   try {
-    const loaded = await codeAssist('loadCodeAssist', { metadata: { ideType: 'ANTIGRAVITY' } }, token, fetcher) as Record<string, unknown>;
-    const project = typeof loaded.cloudaicompanionProject === 'string' ? loaded.cloudaicompanionProject : null;
-    if (!project) {
-      return ingestSnapshot.parse({
-        account_id: accountId, provider: googleProvider, observed_at: observedAt,
-        status: 'error', limits: [], metadata: { diagnostic_code: 'usage_values_unavailable' }
-      });
-    }
-    const summary = await codeAssist('retrieveUserQuotaSummary', { project }, token, fetcher);
-    return parseQuotaSummary(summary, accountId, observedAt);
+    const result = await runner();
+    stdout = result.stdout ?? '';
+    stderr = result.stderr ?? '';
   } catch (error) {
-    const diagnostic = error && typeof error === 'object' && 'diagnostic' in error
-      && typeof (error as { diagnostic: unknown }).diagnostic === 'string'
-      ? (error as { diagnostic: string }).diagnostic : 'cli_collection_failed';
-    return ingestSnapshot.parse({
-      account_id: accountId, provider: googleProvider, observed_at: observedAt,
-      status: 'error', limits: [], metadata: { diagnostic_code: diagnostic }
-    });
+    const text = errorText(error);
+    if (isAuthFailure(text)) return errorSnapshot(accountId, observedAt, 'sign_in_required');
+    return errorSnapshot(accountId, observedAt, 'cli_collection_failed');
   }
+  if (isAuthFailure(`${stdout}\n${stderr}`)) {
+    return errorSnapshot(accountId, observedAt, 'sign_in_required');
+  }
+  const trimmed = stdout.trim();
+  if (!trimmed) return errorSnapshot(accountId, observedAt, 'usage_values_unavailable');
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed) as unknown;
+  } catch {
+    return errorSnapshot(accountId, observedAt, 'usage_values_unavailable');
+  }
+  const normalized = normalizeAgyUsage(parsed);
+  if (!normalized) return errorSnapshot(accountId, observedAt, 'usage_values_unavailable');
+  return parseQuotaSummary(normalized, accountId, observedAt);
 }

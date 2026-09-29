@@ -23,6 +23,27 @@ const geminiSummary = {
   ]
 };
 
+const agyFixture = {
+  command: {
+    name: 'usage',
+    data: {
+      groups: [
+        {
+          name: 'Gemini Models',
+          buckets: [
+            { id: 'gemini-weekly', name: 'Weekly Limit Remaining', window: 'weekly', remaining_fraction: 0.99, reset_time: '2026-10-06T11:28:42Z' },
+            { id: 'gemini-5h', name: 'Five Hour Limit Remaining', window: '5h', remaining_fraction: 0.98, reset_time: '2026-09-29T16:28:42Z' }
+          ]
+        },
+        {
+          name: 'Claude and GPT models',
+          buckets: [{ id: '3p-weekly', window: 'weekly', remaining_fraction: 1 }]
+        }
+      ]
+    }
+  }
+};
+
 describe('Google AI Pro quota', () => {
   it('maps Gemini Apps five-hour and weekly remaining fractions and ignores other model groups', () => {
     const snapshot = parseQuotaSummary(geminiSummary, accountId, observedAt);
@@ -64,25 +85,43 @@ describe('Google AI Pro quota', () => {
     expect(snapshot.limits.every(limit => limit.reset_at === null)).toBe(true);
   });
 
-  it('asks for a signed-in Mac session instead of reading API keys', async () => {
+  it('collects Gemini meters from agy /usage JSON and ignores Claude/GPT groups', async () => {
     const snapshot = await collect(accountId, {
-      reader: async () => { throw new Error('missing'); },
-      fetcher: async () => { throw new Error('should not fetch'); }
+      runner: async () => ({ stdout: JSON.stringify(agyFixture) })
+    });
+    expect(snapshot.status).toBe('ok');
+    expect(snapshot.limits.map(limit => [limit.id, limit.kind, limit.remaining_fraction, limit.reset_at])).toEqual([
+      ['session-gemini-apps', 'session', 0.98, '2026-09-29T16:28:42.000Z'],
+      ['weekly-gemini-apps', 'weekly', 0.99, '2026-10-06T11:28:42.000Z']
+    ]);
+    expect(JSON.stringify(snapshot)).not.toContain('ya29.');
+  });
+
+  it('reports sign_in_required when agy indicates an auth failure', async () => {
+    const snapshot = await collect(accountId, {
+      runner: async () => { throw new Error('Not logged in — authentication required. Please sign in.'); }
     });
     expect(snapshot).toMatchObject({ status: 'error', limits: [], metadata: { diagnostic_code: 'sign_in_required' } });
     expect(JSON.stringify(snapshot)).not.toContain('ya29.');
   });
 
-  it('does not log or publish the local Antigravity access token', async () => {
-    const token = 'ya29.private-access-token-value-should-never-leak';
+  it('reports usage_values_unavailable when agy returns no Gemini buckets', async () => {
     const snapshot = await collect(accountId, {
-      reader: async () => JSON.stringify({ token: { access_token: token } }),
-      fetcher: async (input) => {
-        expect(String(input)).toContain('loadCodeAssist');
-        return new Response(JSON.stringify({ cloudaicompanionProject: 'unused' }), { status: 401 });
-      }
+      runner: async () => ({
+        stdout: JSON.stringify({
+          command: {
+            name: 'usage',
+            data: {
+              groups: [{
+                name: 'Claude and GPT models',
+                buckets: [{ id: '3p-weekly', name: 'Weekly Limit Remaining', window: 'weekly', remaining_fraction: 1 }]
+              }]
+            }
+          }
+        })
+      })
     });
-    expect(snapshot.metadata.diagnostic_code).toBe('token_expired');
-    expect(JSON.stringify(snapshot)).not.toContain(token);
+    expect(snapshot).toMatchObject({ status: 'error', limits: [], metadata: { diagnostic_code: 'usage_values_unavailable' } });
+    expect(JSON.stringify(snapshot)).not.toContain('ya29.');
   });
 });
