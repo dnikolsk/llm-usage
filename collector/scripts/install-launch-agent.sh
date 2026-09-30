@@ -27,7 +27,8 @@ config = {
     'Label': 'com.llm-usage.collector',
     'ProgramArguments': ['/bin/zsh', os.environ['COLLECTOR_SCRIPT']],
     'EnvironmentVariables': {
-        'PATH': path
+        'PATH': path,
+        'LLM_USAGE_URL': os.environ.get('LLM_USAGE_URL') or 'https://llm-usage.vercel.app'
     },
     'RunAtLoad': True,
     'StartInterval': 300,

@@ -5,10 +5,12 @@
 -- ChatGPT/OpenAI collector emits scope work_codex (Work/Codex allowance).
 -- Claude stays high_reasoning; Google AI Pro stays gemini_apps.
 --
--- Apply on prod Neon (Builder confirms). Do NOT run against production without review.
--- Example: Neon SQL editor, or:
---   vercel env run -e production -- pnpm --filter @llm-usage/db exec -- \
---     psql "$DATABASE_URL" -f packages/db/scripts/align-route-classes.sql
+-- Review the target database and account IDs before applying. From the repository
+-- root, with the target DATABASE_URL exported:
+--   psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/db/scripts/align-route-classes.sql
+-- With a linked Vercel project, expand DATABASE_URL inside the environment runner:
+--   vercel env run -e production -- sh -c \
+--     'psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/db/scripts/align-route-classes.sql'
 --
 -- Note: `pnpm --filter @llm-usage/db provision` only inserts and refuses
 -- conflicting updates — use this SQL (or a manual UPDATE) for existing rows.
