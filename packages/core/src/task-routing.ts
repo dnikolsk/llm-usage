@@ -33,7 +33,8 @@ const models: Record<string, ModelOption[]> = {
   ],
   openai: [
     // Collector + inventory use work_codex (Work/Codex allowance), not high_reasoning.
-    { id: 'gpt-6-sol', label: 'GPT-6 Sol', model_class: 'work_codex', tier: 'general' },
+    // Sol is advanced so hard tasks can climb Astra > Opus > Sol; easy shelf still prefers general.
+    { id: 'gpt-6-sol', label: 'GPT-6 Sol', model_class: 'work_codex', tier: 'advanced' },
     { id: 'gpt-6-astra', label: 'GPT-6 Astra', model_class: 'work_codex', tier: 'advanced' }
   ],
   cursor: [
@@ -63,6 +64,12 @@ export type TaskAccountCandidate = Candidate & {
 
 // Difficulty at or above this Jev score requires an advanced-tier model, regardless of local or cloud placement.
 export const ADVANCED_DIFFICULTY = 1.75;
+/** Higher = better. Among advanced models with an explicit rank, quality beats pace. */
+export const ADVANCED_QUALITY_RANK: Record<string, number> = {
+  'gpt-6-astra': 3,
+  'claude-opus': 2,
+  'gpt-6-sol': 1
+};
 // Jev confidence below which a warning is added, and below which cloud placement is refused.
 export const LOW_CONFIDENCE_WARNING = 0.6;
 export const MIN_CLOUD_CONFIDENCE = 0.5;
@@ -136,10 +143,17 @@ export function recommendTask(accounts: AccountState[], request: TaskRouteReques
 
   const eligible = modelCandidates.filter(candidate => candidate.eligible).sort((a, b) => {
     if (a.continuation !== b.continuation) return a.continuation ? -1 : 1;
+    // Below the hard floor, the general shelf wins over the advanced shelf (including Sol).
     if (!advanced && a.tier !== b.tier) return a.tier === 'general' ? -1 : 1;
     if (size === 'large') {
       const capacity = (b.usable_capacity ?? 0) - (a.usable_capacity ?? 0);
       if (Math.abs(capacity) > 0.15) return capacity;
+    }
+    // Among advanced models, quality rank beats pace (Astra > Opus > Sol).
+    if (a.tier === 'advanced' && b.tier === 'advanced') {
+      const rankA = ADVANCED_QUALITY_RANK[a.model_id];
+      const rankB = ADVANCED_QUALITY_RANK[b.model_id];
+      if (rankA !== undefined && rankB !== undefined && rankA !== rankB) return rankB - rankA;
     }
     const pace = (b.pace_surplus ?? -1) - (a.pace_surplus ?? -1);
     if (Math.abs(pace) > 0.03) return pace;

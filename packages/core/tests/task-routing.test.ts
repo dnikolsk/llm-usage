@@ -63,7 +63,7 @@ describe('task-aware routing', () => {
       interaction_level: 'low', needs_mac: false }, judgment, { now });
     expect(result.recommended?.account_id).toBe('codex');
     expect(result.recommended?.execution).toBe('cloud');
-    expect(result.handoff).toMatchObject({status:'not_started',provider:'openai',model_id:'gpt-6-sol'});
+    expect(result.handoff).toMatchObject({status:'not_started',provider:'openai',model_id:'gpt-6-astra'});
   });
 
   it('keeps demanding work on a capable model and local when Mac tools are needed', () => {
@@ -107,6 +107,39 @@ describe('task-aware routing', () => {
       capability: 'coding', needs_mac: true }, { ...judgment, difficulty: 2.2 }, { now });
     expect(hard.recommended?.model_id).toBe('gemini-pro');
     expect(hard.candidates.find(c => c.model_id === 'gemini-flash')?.exclusions).toContain('quality_below_task');
+  });
+
+  it('picks Astra over richer-pace Opus on a hard task with no continuation', () => {
+    // Three eligible advanced accounts; Opus has better pace_surplus than Astra; no project continuity.
+    const astra = account('chatgpt-astra', 'openai', 0.55, 1, 4); // remaining 0.55, timeLeft ~0.2 → pace ~0.35
+    const opus = account('claude-opus-rich', 'anthropic', 0.90, 1, 4); // remaining 0.90, timeLeft ~0.2 → pace ~0.70
+    const sol = account('chatgpt-sol', 'openai', 0.70, 1, 4);
+    // Distinct OpenAI accounts each expose both Sol and Astra; filter recommendations by model_id.
+    const hard: TaskJudgment = { ...judgment, difficulty: 2.2, workSize: 1 };
+    const result = recommendTask([astra, opus, sol], {
+      task: 'Refactor the distributed consensus layer carefully',
+      project: { stage: 'new' }, estimated_work: 'medium', capability: 'coding', needs_mac: true
+    }, hard, { now });
+    expect(result.recommended?.model_id).toBe('gpt-6-astra');
+    expect(result.reason?.quality_floor).toBe('advanced');
+    const opusPace = result.candidates.find(c => c.model_id === 'claude-opus')?.pace_surplus;
+    const astraPace = result.candidates.find(c => c.account_id === 'chatgpt-astra' && c.model_id === 'gpt-6-astra')?.pace_surplus;
+    expect(opusPace).toBeGreaterThan(astraPace ?? 0);
+  });
+
+  it('keeps easy work on the general shelf even when advanced Sol has richer pace', () => {
+    const solRich = account('chatgpt-personal', 'openai', 0.95, 1, 4);
+    const sonnetLean = account('claude-personal', 'anthropic', 0.45, 4, 1);
+    const flashLean = account('google-ai-pro-personal', 'google', 0.45, 4, 1);
+    const easy: TaskJudgment = { ...judgment, difficulty: 1.0, workSize: 0.5 };
+    const result = recommendTask([solRich, sonnetLean, flashLean], {
+      task: 'Fix a typo in the README title',
+      project: { stage: 'new' }, estimated_work: 'quick', capability: 'coding'
+    }, easy, { now });
+    expect(['claude-sonnet', 'gemini-flash', 'cursor-auto']).toContain(result.recommended?.model_id);
+    expect(result.recommended?.model_id).not.toBe('gpt-6-sol');
+    expect(result.recommended?.model_id).not.toBe('gpt-6-astra');
+    expect(result.reason?.quality_floor).toBe('general');
   });
 
   it('requires a bounded, structured task request', () => {
@@ -298,7 +331,8 @@ describe('route_task provider win matrix (aligned classes)', () => {
       [exhaust(account('claude-personal', 'anthropic', 0.9, 2, 3)), exhaust(account('cursor-personal', 'cursor', 0.9, 2, 3)),
         account('chatgpt-personal', 'openai', 0.9, 2, 3), exhaust(account('google-ai-pro-personal', 'google', 0.9, 2, 3))],
       task, judgment, { now });
-    expect(result.recommended).toMatchObject({ account_id: 'chatgpt-personal', provider: 'openai', model_id: 'gpt-6-sol' });
+    // Sol is advanced; with only OpenAI eligible, quality rank picks Astra over Sol.
+    expect(result.recommended).toMatchObject({ account_id: 'chatgpt-personal', provider: 'openai', model_id: 'gpt-6-astra' });
   });
 
   it('Google wins route_task once when peers are exhausted', () => {
