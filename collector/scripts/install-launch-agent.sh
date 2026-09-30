@@ -13,11 +13,22 @@ COLLECTOR_SCRIPT="$repo_root/collector/scripts/sync-all.sh" PLIST_PATH="$plist" 
 import os
 import plistlib
 
+home = os.path.expanduser('~')
+path = ':'.join([
+    os.path.join(home, '.local', 'share', 'mise', 'shims'),
+    os.path.join(home, '.mise', 'shims'),
+    os.path.join(home, '.local', 'bin'),
+    '/opt/homebrew/bin',
+    '/usr/local/bin',
+    '/usr/bin',
+    '/bin',
+])
 config = {
     'Label': 'com.llm-usage.collector',
     'ProgramArguments': ['/bin/zsh', os.environ['COLLECTOR_SCRIPT']],
     'EnvironmentVariables': {
-        'PATH': os.path.expanduser('~/.local/bin') + ':/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin'
+        'PATH': path,
+        'LLM_USAGE_URL': os.environ.get('LLM_USAGE_URL') or 'https://llm-usage.vercel.app'
     },
     'RunAtLoad': True,
     'StartInterval': 300,

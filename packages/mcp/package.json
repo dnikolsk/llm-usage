@@ -1,0 +1,30 @@
+{
+  "name": "@llm-usage/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only stdio MCP for llm-usage: status, route, route_task. Thin HTTP client to the deployed /v1 API; no write or ingest tools.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "llm-usage-mcp": "./bin/llm-usage-mcp.mjs"
+  },
+  "scripts": {
+    "start": "tsx src/stdio.ts",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "tsx": "^4.23.15",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

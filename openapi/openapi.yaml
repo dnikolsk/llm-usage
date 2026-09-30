@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: LLM Usage Tracker API
   version: 0.1.0
-  description: Single-owner normalized subscription usage and explainable routing.
+  description: Single-owner normalized subscription usage and explainable routing. Response timestamps use UTC.
 servers:
   - url: https://your-deployment.vercel.app
 paths:
@@ -22,6 +22,7 @@ paths:
                   generated_at: {type: string, format: date-time}
                   accounts: {type: array, items: {$ref: '#/components/schemas/AccountState'}}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {description: Usage storage is unavailable}
   /v1/route:
     get:
       summary: Deterministic capacity recommendation and all candidate inputs
@@ -46,7 +47,27 @@ paths:
                   reason: {type: [object, 'null'], additionalProperties: true}
                   alternatives: {type: array, items: {type: object, additionalProperties: true}}
                   candidates: {type: array, items: {$ref: '#/components/schemas/Candidate'}}
+        '400': {description: Invalid capability or model_class filter}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {description: Usage storage is unavailable}
+    post:
+      summary: Jev-assisted task recommendation with app, model, and local/cloud placement
+      description: Jev judges task difficulty and work pattern. The service applies measured capacity, renewal pace, quality, and continuity rules. It recommends cloud work but does not launch it.
+      security: [{readToken: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TaskRouteRequest'}
+      responses:
+        '200':
+          description: Recommendation, reasons, alternatives, candidate exclusions, and optional cloud handoff
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TaskRouteResponse'}
+        '400': {description: Invalid request}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {description: Usage storage or Jev is unavailable}
   /v1/ingest:
     post:
       summary: Append a complete observation for a provisioned account
@@ -68,6 +89,7 @@ paths:
         '404': {description: Account not provisioned or provider mismatch}
         '409': {description: Idempotency key reused for a different payload}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {description: Usage storage is unavailable}
 components:
   securitySchemes:
     readToken: {type: http, scheme: bearer}
@@ -75,6 +97,86 @@ components:
   responses:
     Unauthorized: {description: Missing or invalid role-specific bearer token}
   schemas:
+    TaskRouteRequest:
+      type: object
+      additionalProperties: false
+      required: [task]
+      properties:
+        task: {type: string, minLength: 12, maxLength: 4000}
+        project:
+          type: object
+          additionalProperties: false
+          required: [stage]
+          properties:
+            stage: {enum: [new, ongoing]}
+            current_account_id: {type: string}
+            current_model: {type: string}
+        estimated_work: {enum: [quick, medium, large]}
+        interaction_level: {enum: [low, high]}
+        needs_mac: {type: boolean}
+        repo_pushed: {type: boolean}
+        capability: {type: string, default: coding}
+    TaskRouteResponse:
+      type: object
+      required: [generated_at, decision_source, recommended, handoff, reason, alternatives, candidates, warnings]
+      properties:
+        generated_at: {type: string, format: date-time}
+        decision_source: {const: jev}
+        recommended:
+          type: [object, 'null']
+          properties:
+            account_id: {type: string}
+            provider: {type: string}
+            model_id: {type: string}
+            model_label: {type: string}
+            model_class: {type: string}
+            execution: {enum: [local, cloud]}
+        handoff:
+          type: [object, 'null']
+          description: Cloud recommendation only; no job has been launched.
+          properties:
+            status: {const: not_started}
+            provider: {type: string}
+            account_id: {type: string}
+            model_id: {type: string}
+            task: {type: string}
+        reason:
+          type: [object, 'null']
+          properties:
+            project_continuity: {type: boolean}
+            estimated_work: {enum: [quick, medium, large]}
+            estimated_need: {type: number}
+            difficulty: {type: number}
+            usable_capacity: {type: [number, 'null']}
+            pace_surplus: {type: [number, 'null']}
+            quality_floor:
+              enum: [general, advanced]
+              description: advanced when Jev difficulty >= 1.75, for local and cloud alike; general-tier models then carry quality_below_task.
+            execution_reason:
+              enum: [mac_dependencies, interactive_work, quick_local, short_or_medium_work, repository_not_ready_for_cloud, low_jev_confidence, unattended_large_job]
+              description: The rule that decided placement. Only unattended_large_job yields execution=cloud, and it requires Jev confidence >= 0.5.
+            jev_model: {type: string}
+            jev_confidence: {type: [number, 'null']}
+        alternatives: {type: array, items: {type: object, additionalProperties: true}}
+        candidates: {type: array, items: {$ref: '#/components/schemas/TaskCandidate'}}
+        warnings:
+          type: array
+          description: low_jev_confidence (confidence < 0.6), continuity_account_unknown, continuity_model_unknown, continuity_ineligible, renewal_pace_unknown.
+          items: {type: string}
+    TaskCandidate:
+      description: One row per account and task model. Accounts without a routable task model appear once with null model fields, eligible=false, and model_class_unsupported among their exclusions.
+      allOf:
+        - {$ref: '#/components/schemas/Candidate'}
+        - type: object
+          required: [model_id, model_label, model_class, tier, pace_surplus, estimated_need, continuation]
+          properties:
+            model_id: {type: [string, 'null']}
+            model_label: {type: [string, 'null']}
+            model_class: {type: [string, 'null']}
+            tier: {enum: [general, advanced, null]}
+            pace_surplus: {type: [number, 'null']}
+            estimated_need: {type: number}
+            continuation: {type: boolean}
     Bucket:
       type: object
       required: [id, account_id, kind, scope, unit, window_seconds, used, limit, remaining, used_fraction, remaining_fraction, window_started_at, reset_at, observed_at, source, confidence, metadata]
@@ -108,7 +210,7 @@ components:
         metadata: {type: object}
     AccountState:
       type: object
-      required: [id, provider, label, enabled, capabilities, model_classes, status, freshness, observed_at, latest_refresh_at, limits]
+      required: [id, provider, label, plan, enabled, capabilities, model_classes, priority, status, freshness, observed_at, latest_refresh_at, limits]
       properties:
         id: {type: string}
         provider: {type: string}
@@ -117,6 +219,7 @@ components:
         enabled: {type: boolean}
         capabilities: {type: array, items: {type: string}}
         model_classes: {type: array, items: {type: string}}
+        priority: {type: integer}
         status: {enum: [available, partial, error, unknown]}
         freshness: {enum: [fresh, stale, seriously_stale, unknown]}
         observed_at: {type: [string, 'null'], format: date-time}
