@@ -26,7 +26,11 @@ OpenAI task models use class `work_codex` (collector Work/Codex buckets). Cursor
 
 ### Quality floor
 
-One rule applies to every task, whether it runs on the Mac or in the cloud: when Jev difficulty is **≥ 1.75** (on its 0–3 scale), only `advanced`-tier models (`claude-opus`, `gpt-6-astra`, `gemini-pro`) are eligible and general-tier rows carry `quality_below_task`. Below 1.75, general-tier models are preferred everywhere, so the same large task may be recommended Sonnet on the Mac and Sonnet in the cloud, never Sonnet on one and Opus on the other. `reason.quality_floor` reports `advanced` or `general`.
+One rule applies to every task, whether it runs on the Mac or in the cloud: when Jev difficulty is **≥ 1.75** (on its 0–3 scale), only `advanced`-tier models (`gpt-6-astra`, `claude-opus`, `gpt-6-sol`, `gemini-pro`) are eligible and general-tier rows carry `quality_below_task`. Below 1.75, general-tier models are preferred everywhere (including over advanced Sol), so the same large task may be recommended Sonnet on the Mac and Sonnet in the cloud, never Sonnet on one and Opus on the other. `reason.quality_floor` reports `advanced` or `general`.
+
+### Advanced quality ranks
+
+Among eligible advanced models, a fixed quality ladder beats renewal pace: **`gpt-6-astra` > `claude-opus` > `gpt-6-sol`**. A hard task with no continuation therefore picks Astra over Opus even when Opus has a richer `pace_surplus`. Unranked advanced models (for example `gemini-pro`) fall through to the usual pace and capacity tie-breaks against ranked peers.
 
 ### Placement
 
