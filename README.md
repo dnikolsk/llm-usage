@@ -4,6 +4,14 @@ Personal subscription capacity tracker with normalized usage snapshots and an ex
 
 The live site at [llm-usage.vercel.app](https://llm-usage.vercel.app) shows a private dashboard with account status, usage windows, and a coding recommendation. Log in with the dashboard password stored separately from the API tokens. Only normalized usage data reaches the service; provider sign-ins remain on the Mac.
 
+## Subscription billing buckets
+
+Which subscription each model bills (routing classes match collector scopes; see [providers](docs/providers.md#subscription-billing-buckets)):
+
+- **Astra and Sol** → ChatGPT / Codex only (`work_codex`). Never Cursor cloud or Cursor `other_models`.
+- **Opus and Sonnet** → Claude (`high_reasoning`), not Cursor `other_models`.
+- **Cursor's own models** → `cursor_models`. **Fable** spends Cursor's `other_models` pool; Fable is not a routable quality-ladder model — `cursor-other-models` is the pool alias in `route_task`.
+
 ## Run locally
 
 1. Install Node 22+, pnpm and Postgres. Run `pnpm install`.

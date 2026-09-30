@@ -278,6 +278,28 @@ describe('golden route matrix (G1–G9)', () => {
   });
 });
 
+
+describe('subscription billing buckets', () => {
+  it('maps Astra/Sol to work_codex, Opus/Sonnet to high_reasoning, Cursor pools correctly; Fable is not routable', () => {
+    const result = recommendTask(
+      [account('chatgpt-personal', 'openai', 0.9, 2, 3),
+        account('claude-personal', 'anthropic', 0.9, 2, 3),
+        account('cursor-personal', 'cursor', 0.9, 2, 3)],
+      { task: 'Fix a typo in the README title', capability: 'coding' }, judgment, { now });
+    const classByModel = Object.fromEntries(
+      result.candidates.filter((c): c is typeof c & { model_id: string } => c.model_id != null)
+        .map(c => [c.model_id, c.model_class]));
+    expect(classByModel['gpt-6-astra']).toBe('work_codex');
+    expect(classByModel['gpt-6-sol']).toBe('work_codex');
+    expect(classByModel['claude-opus']).toBe('high_reasoning');
+    expect(classByModel['claude-sonnet']).toBe('high_reasoning');
+    expect(classByModel['claude-opus']).not.toBe('other_models');
+    expect(classByModel['cursor-auto']).toBe('cursor_models');
+    expect(classByModel['cursor-other-models']).toBe('other_models');
+    expect(result.candidates.some(c => c.model_id === 'fable')).toBe(false);
+  });
+});
+
 describe('old class-map gaps', () => {
   const quick: TaskJudgment = { difficulty: 0, workSize: 0.1, interactive: 0.1, needsMac: 0.1, confidence: 1, model: 'jev-test' };
 
