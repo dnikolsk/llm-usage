@@ -5,15 +5,30 @@ const now = new Date('2026-09-25T12:00:00.000Z');
 const judgment: TaskJudgment = { difficulty: 1, workSize: 1, interactive: 0.2, needsMac: 0.1,
   confidence: 0.9, model: 'jev-test' };
 
+function classesFor(provider: string): string[] {
+  if (provider === 'cursor') return ['cursor_models', 'other_models'];
+  if (provider === 'openai') return ['work_codex'];
+  if (provider === 'google') return ['gemini_apps'];
+  return ['high_reasoning'];
+}
+
+function scopeFor(provider: string): string {
+  if (provider === 'cursor') return 'cursor_models';
+  if (provider === 'openai') return 'work_codex';
+  if (provider === 'google') return 'gemini_apps';
+  return 'all_models';
+}
+
 function account(id: string, provider: string, remaining: number, resetHours: number, startedHours: number): AccountState {
   const observed = '2026-09-25T11:58:00.000Z';
   const reset = new Date(now.getTime() + resetHours * 3_600_000).toISOString();
   const start = new Date(now.getTime() - startedHours * 3_600_000).toISOString();
+  const kind = provider === 'cursor' ? 'monthly' : 'session';
   return { id, provider, label: id, plan: null, enabled: true, capabilities: ['coding'],
-    model_classes: provider === 'cursor' ? ['cursor_models', 'other_models'] : ['high_reasoning'],
+    model_classes: classesFor(provider),
     priority: 0, status: 'available', freshness: 'fresh', observed_at: observed, latest_refresh_at: observed,
-    limits: [{ id: 'session', account_id: id, kind: 'session',
-      scope: provider === 'cursor' ? 'cursor_models' : 'all_models', unit: 'fraction',
+    limits: [{ id: `${kind}-primary`, account_id: id, kind,
+      scope: scopeFor(provider), unit: 'fraction',
       window_seconds: (resetHours + startedHours) * 3600, used: null, limit: null, remaining: null,
       used_fraction: 1 - remaining, remaining_fraction: remaining, window_started_at: start,
       reset_at: reset, observed_at: observed, source: 'provider_ui', confidence: 'provider_reported', metadata: {} }] };
@@ -101,12 +116,11 @@ describe('task-aware routing', () => {
 });
 
 describe('golden route matrix (G1–G9)', () => {
-  // Mirrors production inventory: only Claude has room; Cursor and ChatGPT are exhausted.
+  // Mirrors aligned production inventory: only Claude has room; Cursor and ChatGPT are exhausted.
   const inventory = () => {
     const claude = account('claude-personal', 'anthropic', 0.92, 2, 3);
-    const cursor = { ...account('cursor-personal', 'cursor', 0, 2, 3), model_classes: ['general'] };
-    cursor.limits[0]!.kind = 'monthly';
-    const chatgpt = { ...account('chatgpt-personal', 'openai', 0, 2, 3), model_classes: ['work_codex'] };
+    const cursor = account('cursor-personal', 'cursor', 0, 2, 3);
+    const chatgpt = account('chatgpt-personal', 'openai', 0, 2, 3);
     chatgpt.limits[0]!.kind = 'weekly';
     return [claude, cursor, chatgpt];
   };
@@ -217,15 +231,81 @@ describe('golden route matrix (G1–G9)', () => {
 
   it('G9: candidates explain why exhausted Cursor and ChatGPT accounts lost', () => {
     const result = recommendTask(inventory(), { task: 'Fix a typo in the README title', capability: 'coding' }, quick, { now });
-    const cursor = result.candidates.find(c => c.account_id === 'cursor-personal');
-    const chatgpt = result.candidates.find(c => c.account_id === 'chatgpt-personal');
-    expect(cursor).toMatchObject({ eligible: false, model_id: null });
-    expect(cursor?.exclusions).toEqual(expect.arrayContaining(['exhausted', 'reserve:monthly', 'model_class_unsupported']));
-    expect(chatgpt).toMatchObject({ eligible: false, model_id: null });
-    expect(chatgpt?.exclusions).toEqual(expect.arrayContaining(['exhausted', 'reserve:weekly']));
-    const routable = recommendTask([inventory()[0]!, account('chatgpt-personal', 'openai', 0, 2, 3)],
-      { task: 'Fix a typo in the README title', capability: 'coding' }, quick, { now });
-    expect(routable.candidates.filter(c => c.account_id === 'chatgpt-personal').map(c => c.exclusions))
-      .toEqual([expect.arrayContaining(['exhausted']), expect.arrayContaining(['exhausted'])]);
+    const cursorRows = result.candidates.filter(c => c.account_id === 'cursor-personal');
+    const chatgptRows = result.candidates.filter(c => c.account_id === 'chatgpt-personal');
+    expect(cursorRows.length).toBeGreaterThan(0);
+    expect(cursorRows.every(c => !c.eligible)).toBe(true);
+    expect(cursorRows.some(c => c.model_id === 'cursor-auto')).toBe(true);
+    expect(cursorRows.find(c => c.model_id === 'cursor-auto')?.exclusions)
+      .toEqual(expect.arrayContaining(['exhausted', 'reserve:monthly']));
+    expect(chatgptRows.length).toBe(2);
+    expect(chatgptRows.every(c => !c.eligible)).toBe(true);
+    expect(chatgptRows.map(c => c.exclusions))
+      .toEqual([expect.arrayContaining(['exhausted', 'reserve:weekly']), expect.arrayContaining(['exhausted', 'reserve:weekly'])]);
+  });
+});
+
+describe('old class-map gaps', () => {
+  const quick: TaskJudgment = { difficulty: 0, workSize: 0.1, interactive: 0.1, needsMac: 0.1, confidence: 1, model: 'jev-test' };
+
+  it('Cursor tagged only general cannot win route_task (pre-fix gap)', () => {
+    const cursor = account('cursor-personal', 'cursor', 0.95, 2, 3);
+    cursor.model_classes = ['general'];
+    const result = recommendTask([cursor], { task: 'Fix a typo in the README title', capability: 'coding' }, quick, { now });
+    expect(result.recommended).toBeNull();
+    expect(result.candidates).toHaveLength(1);
+    expect(result.candidates[0]).toMatchObject({ eligible: false, model_id: null });
+    expect(result.candidates[0]?.exclusions).toContain('model_class_unsupported');
+  });
+
+  it('ChatGPT tagged high_reasoning cannot win route_task after work_codex alignment', () => {
+    const chatgpt = account('chatgpt-personal', 'openai', 0.95, 2, 3);
+    chatgpt.model_classes = ['high_reasoning'];
+    const result = recommendTask([chatgpt], { task: 'Fix a typo in the README title', capability: 'coding' }, quick, { now });
+    expect(result.recommended).toBeNull();
+    expect(result.candidates[0]).toMatchObject({ eligible: false, model_id: null });
+    expect(result.candidates[0]?.exclusions).toContain('model_class_unsupported');
+  });
+});
+
+describe('route_task provider win matrix (aligned classes)', () => {
+  const judgment: TaskJudgment = { difficulty: 0.4, workSize: 0.2, interactive: 0.1, needsMac: 0.1,
+    confidence: 0.95, model: 'jev-test' };
+  const task = { task: 'Fix a typo in the README title', capability: 'coding' as const, estimated_work: 'quick' as const };
+
+  function exhaust(a: AccountState): AccountState {
+    return { ...a, limits: a.limits.map(b => ({ ...b, remaining_fraction: 0, used_fraction: 1 })) };
+  }
+
+  it('Claude wins route_task once when peers are exhausted', () => {
+    const result = recommendTask(
+      [account('claude-personal', 'anthropic', 0.9, 2, 3), exhaust(account('cursor-personal', 'cursor', 0.9, 2, 3)),
+        exhaust(account('chatgpt-personal', 'openai', 0.9, 2, 3)), exhaust(account('google-ai-pro-personal', 'google', 0.9, 2, 3))],
+      task, judgment, { now });
+    expect(result.recommended).toMatchObject({ account_id: 'claude-personal', provider: 'anthropic', model_id: 'claude-sonnet' });
+  });
+
+  it('Cursor wins route_task once when peers are exhausted', () => {
+    const result = recommendTask(
+      [exhaust(account('claude-personal', 'anthropic', 0.9, 2, 3)), account('cursor-personal', 'cursor', 0.9, 2, 3),
+        exhaust(account('chatgpt-personal', 'openai', 0.9, 2, 3)), exhaust(account('google-ai-pro-personal', 'google', 0.9, 2, 3))],
+      task, judgment, { now });
+    expect(result.recommended).toMatchObject({ account_id: 'cursor-personal', provider: 'cursor', model_id: 'cursor-auto' });
+  });
+
+  it('ChatGPT wins route_task once when peers are exhausted', () => {
+    const result = recommendTask(
+      [exhaust(account('claude-personal', 'anthropic', 0.9, 2, 3)), exhaust(account('cursor-personal', 'cursor', 0.9, 2, 3)),
+        account('chatgpt-personal', 'openai', 0.9, 2, 3), exhaust(account('google-ai-pro-personal', 'google', 0.9, 2, 3))],
+      task, judgment, { now });
+    expect(result.recommended).toMatchObject({ account_id: 'chatgpt-personal', provider: 'openai', model_id: 'gpt-6-sol' });
+  });
+
+  it('Google wins route_task once when peers are exhausted', () => {
+    const result = recommendTask(
+      [exhaust(account('claude-personal', 'anthropic', 0.9, 2, 3)), exhaust(account('cursor-personal', 'cursor', 0.9, 2, 3)),
+        exhaust(account('chatgpt-personal', 'openai', 0.9, 2, 3)), account('google-ai-pro-personal', 'google', 0.9, 2, 3)],
+      task, judgment, { now });
+    expect(result.recommended).toMatchObject({ account_id: 'google-ai-pro-personal', provider: 'google', model_id: 'gemini-flash' });
   });
 });

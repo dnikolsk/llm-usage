@@ -22,6 +22,8 @@ Jev makes four narrow judgments in one call: difficulty, work size, likely inter
 
 `project.current_account_id` must be an inventory id from `GET /v1/status` (for example `claude-personal`, `cursor-personal`, `chatgpt-personal`, `google-ai-pro-personal`), and `current_model` a task model id (`claude-sonnet`, `claude-opus`, `gpt-6-sol`, `gpt-6-astra`, `cursor-auto`, `cursor-other-models`, `gemini-flash`, `gemini-pro`).
 
+OpenAI task models use class `work_codex` (collector Work/Codex buckets). Cursor uses `cursor_models` / `other_models`. Accounts must carry the same `model_classes` in inventory.
+
 ### Quality floor
 
 One rule applies to every task, whether it runs on the Mac or in the cloud: when Jev difficulty is **≥ 1.75** (on its 0–3 scale), only `advanced`-tier models (`claude-opus`, `gpt-6-astra`, `gemini-pro`) are eligible and general-tier rows carry `quality_below_task`. Below 1.75, general-tier models are preferred everywhere, so the same large task may be recommended Sonnet on the Mac and Sonnet in the cloud, never Sonnet on one and Opus on the other. `reason.quality_floor` reports `advanced` or `general`.
