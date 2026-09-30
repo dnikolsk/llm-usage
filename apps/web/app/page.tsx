@@ -10,7 +10,7 @@ function Login({ failed, configured }: { failed: boolean; configured: boolean })
   return <main className="login-shell"><div className="login-orb" aria-hidden="true" /><section className="login-card">
     <div className="eyebrow"><span className="brand-mark">◈</span> LLM USAGE</div>
     <h1>Your accounts, at a glance.</h1>
-    <p>View the latest usage collected from your Mac mini. Your Claude, Cursor, Codex, and Google AI Pro sign-ins stay on that Mac.</p>
+    <p>View the latest usage collected from your Mac. Your Claude, Cursor, Codex, and Google AI Pro sign-ins stay on that Mac.</p>
     {configured ? <form action="/dashboard/login" method="post" className="login-form">
       <label htmlFor="password">Dashboard password</label>
       <input id="password" name="password" type="password" autoComplete="current-password" required autoFocus />
@@ -42,7 +42,7 @@ function AccountCard({ account, now }: { account: AccountState; now: Date }) {
       </span>
     </div>
     <div className="account-body">{hasLimits ? account.limits.map(bucket => <Meter key={bucket.id} bucket={bucket} />)
-      : <div className="empty-limits"><span aria-hidden="true">◌</span><strong>{account.provider === 'cursor' ? 'Personal quota not exposed' : account.provider === 'google' ? 'Google AI Pro quota unavailable' : 'No usage windows available'}</strong><p>{account.provider === 'cursor' ? 'Cursor CLI confirms your sign-in, but does not provide personal-plan usage figures.' : account.provider === 'google' ? 'Sign in to Gemini or Antigravity on the Mac mini. This account is the Google AI Pro subscription, not Gemini API billing.' : 'The collector has not reported a usable quota yet.'}</p></div>}</div>
+      : <div className="empty-limits"><span aria-hidden="true">◌</span><strong>{account.provider === 'cursor' ? 'Cursor quota unavailable' : account.provider === 'google' ? 'Google AI Pro quota unavailable' : 'No usage windows available'}</strong><p>{account.provider === 'cursor' ? 'The collector has not reported usable Cursor subscription usage. Check the local Cursor sign-in and collector status.' : account.provider === 'google' ? 'Sign in to Gemini or Antigravity on the Mac. This account is the Google AI Pro subscription, not Gemini API billing.' : 'The collector has not reported a usable quota yet.'}</p></div>}</div>
     <div className="account-bottom"><span>Last checked</span><time dateTime={account.latest_refresh_at ?? undefined}>{age(account.latest_refresh_at, now)}</time></div>
   </article>;
 }
@@ -67,7 +67,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
   return <main className="dashboard-shell"><div className="dashboard-width">
     <header className="site-header"><div className="brand"><span className="brand-mark">◈</span><span>LLM <b>USAGE</b></span></div>
       <div className="header-actions"><a href="/" className="refresh-link">↻ <span>Refresh</span></a><form action="/dashboard/logout" method="post"><button type="submit" className="signout-button">Sign out</button></form></div></header>
-    <section className="hero"><div className="hero-copy"><div className="eyebrow"><span className="eyebrow-line" /> PERSONAL USAGE DASHBOARD</div><h1>Know what’s<br /><em>available.</em></h1><p>Live subscription capacity from your Mac mini sign-ins.</p></div>
+    <section className="hero"><div className="hero-copy"><div className="eyebrow"><span className="eyebrow-line" /> PERSONAL USAGE DASHBOARD</div><h1>Know what’s<br /><em>available.</em></h1><p>Live subscription capacity from your Mac sign-ins.</p></div>
       <div className="hero-aside"><div className={`pulse-dot${sync.stale ? ' pulse-stale' : ''}`} /><span>{sync.label}</span><strong>{data ? `${data.accounts.length} accounts connected` : 'Service unavailable'}</strong><small>Updated {latestUpdate ? formatTime(latestUpdate) : '—'}</small></div></section>
     <section className="overview" aria-label="Overview">
       <div className="overview-item"><span className="overview-label">CODING PICK</span><strong>{codingPick ?? 'No fresh recommendation'}</strong><small>Based on measured capacity and routing reserves</small></div>
@@ -77,6 +77,6 @@ export default async function Home({ searchParams }: { searchParams: Promise<{ l
     <div className="section-heading"><div><span className="eyebrow">CONNECTED ACCOUNTS</span><h2>Usage by provider</h2></div><span className="section-note">Read-only view · Updated automatically by your Mac</span></div>
     {data ? <div className="account-grid">{data.accounts.map(account => <AccountCard key={account.id} account={account} now={now} />)}</div>
       : <div className="unavailable" role="status"><strong>Usage is temporarily unavailable.</strong><p>Try refreshing in a moment. Your collectors will keep syncing in the background.</p></div>}
-    <footer className="site-footer"><span>LLM Usage Tracker</span><span>Provider credentials never leave your Mac mini.</span></footer>
+    <footer className="site-footer"><span>LLM Usage Tracker</span><span>Provider credentials never leave your Mac.</span></footer>
   </div></main>;
 }

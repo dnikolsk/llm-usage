@@ -4,7 +4,7 @@ set -u
 # Include mise shims when present so launchd still finds node after a runtime manager change.
 # Homebrew and ~/.local/bin remain. This does not require mise.
 export PATH="$HOME/.local/share/mise/shims:$HOME/.mise/shims:$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
-export LLM_USAGE_URL="https://llm-usage.vercel.app"
+export LLM_USAGE_URL="${LLM_USAGE_URL:-https://llm-usage.vercel.app}"
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)" || exit 1
 cd "$repo_root" || exit 1

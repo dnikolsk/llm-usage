@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: LLM Usage Tracker API
   version: 0.1.0
-  description: Single-owner normalized subscription usage and explainable routing.
+  description: Single-owner normalized subscription usage and explainable routing. Response timestamps use UTC.
 servers:
   - url: https://your-deployment.vercel.app
 paths:
@@ -22,6 +22,7 @@ paths:
                   generated_at: {type: string, format: date-time}
                   accounts: {type: array, items: {$ref: '#/components/schemas/AccountState'}}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {description: Usage storage is unavailable}
   /v1/route:
     get:
       summary: Deterministic capacity recommendation and all candidate inputs
@@ -46,7 +47,9 @@ paths:
                   reason: {type: [object, 'null'], additionalProperties: true}
                   alternatives: {type: array, items: {type: object, additionalProperties: true}}
                   candidates: {type: array, items: {$ref: '#/components/schemas/Candidate'}}
+        '400': {description: Invalid capability or model_class filter}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {description: Usage storage is unavailable}
     post:
       summary: Jev-assisted task recommendation with app, model, and local/cloud placement
       description: Jev judges task difficulty and work pattern. The service applies measured capacity, renewal pace, quality, and continuity rules. It recommends cloud work but does not launch it.
@@ -86,6 +89,7 @@ paths:
         '404': {description: Account not provisioned or provider mismatch}
         '409': {description: Idempotency key reused for a different payload}
         '401': {$ref: '#/components/responses/Unauthorized'}
+        '503': {description: Usage storage is unavailable}
 components:
   securitySchemes:
     readToken: {type: http, scheme: bearer}
@@ -206,7 +210,7 @@ components:
         metadata: {type: object}
     AccountState:
       type: object
-      required: [id, provider, label, enabled, capabilities, model_classes, status, freshness, observed_at, latest_refresh_at, limits]
+      required: [id, provider, label, plan, enabled, capabilities, model_classes, priority, status, freshness, observed_at, latest_refresh_at, limits]
       properties:
         id: {type: string}
         provider: {type: string}
@@ -215,6 +219,7 @@ components:
         enabled: {type: boolean}
         capabilities: {type: array, items: {type: string}}
         model_classes: {type: array, items: {type: string}}
+        priority: {type: integer}
         status: {enum: [available, partial, error, unknown]}
         freshness: {enum: [fresh, stale, seriously_stale, unknown]}
         observed_at: {type: [string, 'null'], format: date-time}

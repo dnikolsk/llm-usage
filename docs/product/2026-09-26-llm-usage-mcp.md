@@ -1,5 +1,7 @@
 # llm-usage MCP connector
 
+> Historical implementation brief. The workflow, paths, and deployment observations below describe the original task, not instructions for a new contributor. Use the [README](../../README.md), [routing guide](../routing.md), and [MCP guide](../../packages/mcp/README.md) for current behavior and setup.
+
 **Owner:** Product → AI Builder  
 **Repo:** `github.com/dnikolsk/llm-usage`  
 **Prod API:** `https://llm-usage.vercel.app`  
