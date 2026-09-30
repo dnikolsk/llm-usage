@@ -26,18 +26,25 @@ export type TaskJudgment = {
 };
 
 type ModelOption = { id: string; label: string; model_class: string; tier: 'general' | 'advanced' };
+// Subscription billing buckets (standing rules; do not retarget without also changing collectors/inventory):
+// - Astra + Sol → work_codex (ChatGPT / Codex subscription only). Never Cursor cloud or other_models.
+// - Opus + Sonnet → high_reasoning (Claude). Never Cursor other_models.
+// - Cursor's own models → cursor_models. The other_models pool is only for Fable billing;
+//   Fable is not a routable quality-ladder id here — use cursor-other-models as the pool alias.
 const models: Record<string, ModelOption[]> = {
   anthropic: [
+    // Claude subscription (high_reasoning), not Cursor other_models.
     { id: 'claude-sonnet', label: 'Claude Sonnet', model_class: 'high_reasoning', tier: 'general' },
     { id: 'claude-opus', label: 'Claude Opus', model_class: 'high_reasoning', tier: 'advanced' }
   ],
   openai: [
-    // Collector + inventory use work_codex (Work/Codex allowance), not high_reasoning.
+    // ChatGPT / Codex Work allowance (work_codex), not high_reasoning and not Cursor.
     // Sol is advanced so hard tasks can climb Astra > Opus > Sol; easy shelf still prefers general.
     { id: 'gpt-6-sol', label: 'GPT-6 Sol', model_class: 'work_codex', tier: 'advanced' },
     { id: 'gpt-6-astra', label: 'GPT-6 Astra', model_class: 'work_codex', tier: 'advanced' }
   ],
   cursor: [
+    // cursor_models = Cursor's own models; other_models = Fable billing pool only (alias below).
     { id: 'cursor-auto', label: 'Cursor Auto', model_class: 'cursor_models', tier: 'general' },
     { id: 'cursor-other-models', label: 'Cursor Other Models', model_class: 'other_models', tier: 'general' }
   ],

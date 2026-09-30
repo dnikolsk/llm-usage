@@ -22,7 +22,7 @@ Jev makes four narrow judgments in one call: difficulty, work size, likely inter
 
 `project.current_account_id` must be an inventory id from `GET /v1/status` (for example `claude-personal`, `cursor-personal`, `chatgpt-personal`, `google-ai-pro-personal`), and `current_model` a task model id (`claude-sonnet`, `claude-opus`, `gpt-6-sol`, `gpt-6-astra`, `cursor-auto`, `cursor-other-models`, `gemini-flash`, `gemini-pro`).
 
-OpenAI task models use class `work_codex` (collector Work/Codex buckets). Cursor uses `cursor_models` / `other_models`. Accounts must carry the same `model_classes` in inventory.
+OpenAI task models (`gpt-6-astra`, `gpt-6-sol`) use class `work_codex` (ChatGPT / Codex subscription only — never Cursor cloud or `other_models`). Claude (`claude-opus`, `claude-sonnet`) uses `high_reasoning`, not Cursor `other_models`. Cursor's own models use `cursor_models`; `cursor-other-models` is the `other_models` pool alias (Fable bills that pool but is not a routable quality-ladder id). Accounts must carry the same `model_classes` in inventory. See [providers](providers.md#subscription-billing-buckets).
 
 ### Quality floor
 

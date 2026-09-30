@@ -12,7 +12,20 @@ Cursor [does not currently expose a public API or CLI command for individual sub
 
 The OpenAI collector measures only the Work/Codex subscription allowance, [shared across those products](https://help.openai.com/fr-ca/articles/20001516-managing-usage-with-gpt-6-astra-in-work-and-codex). It does not represent ordinary chat-message limits, API billing, or purchased credits. Its bucket scope is `work_codex`. Provision that model class for a class-filtered route; an account tagged only `general` will not match it.
 
-Task routing maps OpenAI models (`gpt-6-sol`, `gpt-6-astra`) to model class `work_codex` so `route_task` matches the collector. Do not retag ChatGPT as `high_reasoning` unless you also change that map.
+### Subscription billing buckets
+
+Standing rules for which subscription each named model bills (inventory `model_classes` must match collector scopes):
+
+| Models | Bills | Class / pool | Not |
+|---|---|---|---|
+| `gpt-6-astra`, `gpt-6-sol` | ChatGPT / Codex only | `work_codex` | Cursor cloud, Cursor `other_models` |
+| `claude-opus`, `claude-sonnet` | Claude | `high_reasoning` | Cursor `other_models` |
+| Cursor's own models (`cursor-auto`) | Cursor Models | `cursor_models` | — |
+| Fable | Cursor Other Models | `other_models` | — |
+
+Fable is a **billing** consumer of Cursor's `other_models` pool only. It is **not** a routable quality-ladder model id in `route_task`. The map exposes `cursor-other-models` as the pool alias so capacity can be routed against that bucket without adding Fable as a selectable task model.
+
+Task routing maps OpenAI models (`gpt-6-sol`, `gpt-6-astra`) to `work_codex` so `route_task` matches the collector. Do not retag ChatGPT as `high_reasoning` unless you also change that map. Do not map Astra, Sol, Opus, or Sonnet onto Cursor `other_models`.
 
 Cursor personal accounts must be provisioned with model classes `cursor_models,other_models` (matching the desktop current-period pools). An account tagged only `general` is invisible to `route_task` because the task model map uses those pool names, not `general`.
 
