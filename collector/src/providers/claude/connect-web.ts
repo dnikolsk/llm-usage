@@ -27,7 +27,7 @@ child.on('error',()=>{state.status='failed';});
 child.on('close',code=>{state.status=code===0?'complete':'failed';output='';});
 const server=createServer(connectionPage(token,publicUrl.origin,state,code=>child.stdin.write(code+'\n')));
 server.headersTimeout=10000;server.requestTimeout=15000;
-server.listen(port,'127.0.0.1',()=>console.log(`Phone connection: ${publicUrl.origin}/connect/${token}\nExpires in 10 minutes. Keep this link private.`));
+server.listen(port,'127.0.0.1',()=>console.log(`Phone connection: ${publicUrl.origin}/connect/${token}.html\nExpires in 10 minutes. Keep this link private.`));
 const stop=()=>{child.kill('SIGTERM');server.close();};
 const timer=setTimeout(stop,600000);server.on('close',()=>clearTimeout(timer));server.on('error',stop);
 process.on('SIGINT',stop);process.on('SIGTERM',stop);

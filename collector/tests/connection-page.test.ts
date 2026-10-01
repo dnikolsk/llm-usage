@@ -10,13 +10,24 @@ describe('phone code handoff',()=>{
   server.listen(0,'127.0.0.1');await once(server,'listening');
   const address=server.address() as {port:number};const base=`http://127.0.0.1:${address.port}/connect/`;
   try{
-   expect((await fetch(base+'wrong')).status).toBe(404);
-   const page=await fetch(base+token);expect(page.headers.get('referrer-policy')).toBe('no-referrer');expect(await page.text()).toContain('Sign in to Claude');
-   expect((await fetch(base+token,{method:'POST',headers:{Origin:'https://evil.example'},body:'code=test-only'})).status).toBe(403);
-   const response=await fetch(base+token,{method:'POST',headers:{Origin:'https://worker.example'},body:'code=test-only',redirect:'manual'});
-   expect(response.status).toBe(303);expect(codes).toEqual(['test-only']);
-   expect(await (await fetch(base+token)).text()).not.toContain('test-only');
-   expect((await fetch(base+token,{method:'POST',headers:{Origin:'https://worker.example'},body:'code=again'})).status).toBe(409);
+   expect((await fetch(base+'wrong.html')).status).toBe(404);
+   const redirect=await fetch(base+token,{redirect:'manual'});
+   expect(redirect.status).toBe(302);
+   expect(redirect.headers.get('location')).toBe(`https://worker.example/connect/${token}.html`);
+   expect(redirect.headers.get('content-type')).toMatch(/text\/html/);
+   expect(redirect.headers.get('content-disposition')).toBe('inline');
+   const page=await fetch(base+token+'.html');
+   expect(page.headers.get('referrer-policy')).toBe('no-referrer');
+   expect(page.headers.get('content-type')).toMatch(/text\/html/);
+   expect(page.headers.get('content-disposition')).toBe('inline');
+   expect(await page.text()).toContain('Sign in to Claude');
+   expect((await fetch(base+token+'.html',{method:'POST',headers:{Origin:'https://evil.example'},body:'code=test-only'})).status).toBe(403);
+   const response=await fetch(base+token+'.html',{method:'POST',headers:{Origin:'https://worker.example'},body:'code=test-only',redirect:'manual'});
+   expect(response.status).toBe(303);
+   expect(response.headers.get('location')).toBe(`https://worker.example/connect/${token}.html`);
+   expect(codes).toEqual(['test-only']);
+   expect(await (await fetch(base+token+'.html')).text()).not.toContain('test-only');
+   expect((await fetch(base+token+'.html',{method:'POST',headers:{Origin:'https://worker.example'},body:'code=again'})).status).toBe(409);
    expect(codes).toHaveLength(1);
   }finally{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));}
  });
