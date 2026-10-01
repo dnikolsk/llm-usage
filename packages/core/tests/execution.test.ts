@@ -51,6 +51,17 @@ describe('execution decision stages',()=>{
   expect(decide([a],[target(a.id)]).selected?.usage).toBe('unknown');
   expect(decide([a,account('known')],[target(a.id),target('known')]).selected?.account_id).toBe('known');
  });
+ it('reports failed telemetry as unknown while retaining a known exhaustion',()=>{
+  const a={...account('failed'),status:'error' as const,usage_diagnostic:'usage_auth_required'};
+  const c=decide([a],[target(a.id)]).selected;
+  expect(c?.usage).toBe('unknown');expect(c?.warnings).toContain('usage_collection_failed');
+  expect(c?.warnings).toContain('usage_auth_required');expect(c?.buckets[0].observed_at).toBe(now.toISOString());
+  a.limits[0].remaining_fraction=0;expect(decide([a],[target(a.id)]).selected).toBeNull();
+ });
+ it('compares measured Claude and Cursor capacity with Codex instead of favoring its telemetry',()=>{
+  const a={...account('claude',.8),provider:'anthropic'},b={...account('cursor',.7),provider:'cursor'},c=account('codex',.14);
+  expect(decide([a,b,c],[target(a.id),target(b.id),target(c.id)]).selected?.account_id).toBe('claude');
+ });
  it('preserves a verified continuation on cloud instead of switching to a fresh local workspace',()=>{
   const a=account('first',.3),b=account('second',.9);const cloud=target('first',{id:'first-cloud',mode:'cloud'});
   const result=decideExecution([a,b],[cloud,target('second')],task,{now,continuation:{target_id:cloud.id,account_id:a.id,repository:task.repository,resumable:true}});

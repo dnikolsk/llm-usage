@@ -45,7 +45,7 @@ export async function getStatus(now=new Date()) {
         observed_at:observed!,source:b.source as UsageBucket['source'],confidence:b.confidence as UsageBucket['confidence'],metadata:b.metadata as UsageBucket['metadata']})) : [];
       return {id:a.id,provider:a.provider,label:a.label,plan:a.plan,enabled:a.enabled,capabilities:a.capabilities,
         model_classes:a.modelClasses,priority:a.priority,status:n?.status === 'error' ? 'error' : n?.status === 'partial' ? 'partial' : s ? 'available':'unknown',
-        freshness:freshness(observed,now), observed_at:observed, latest_refresh_at:n?.observedAt.toISOString() ?? null,limits};
+        freshness:freshness(observed,now), observed_at:observed, latest_refresh_at:n?.observedAt.toISOString() ?? null,usage_diagnostic:(n?.metadata as {diagnostic_code?:string}|undefined)?.diagnostic_code??null,limits};
     });
     return {generated_at:now.toISOString(),accounts:states};
   } finally { await client.end(); }

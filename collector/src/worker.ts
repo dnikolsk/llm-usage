@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { workerConfig, command, type Target } from './providers/types';
 import * as codex from './providers/codex/index';
-import {readUsage} from './providers/codex/usage';
+import {collectUsage} from './usage';
 import * as claude from './providers/claude/index';
 import * as cursor from './providers/cursor/index';
 const config=workerConfig.parse(JSON.parse(await readFile(process.argv[2]??'', 'utf8')));
@@ -27,9 +27,11 @@ async function health(target:Target){
   const supported=target.mode==='local'||target.provider==='openai';
   let ready=false;
   try{ready=supported&&await adapter(target).authenticated(command(target));}catch{}
-  if(ready&&target.provider==='openai'&&Date.now()-(usageChecked.get(target.account_id)??0)>60_000){
-    usageChecked.set(target.account_id,Date.now());
-    try{const usage=await readUsage(target);await api('usage',usage.snapshot);if(usage.allowed===false)usageDenied.add(target.account_id);else if(usage.allowed===true)usageDenied.delete(target.account_id);}catch{/* Quota telemetry failure is not a login failure. */}
+  if(ready&&Date.now()-(usageChecked.get(target.account_id)??0)>60_000){
+    const usage=await collectUsage(target);
+    await api('usage',usage.snapshot);
+    usageChecked.set(target.account_id,Date.now()+(usage.snapshot.metadata.diagnostic_code==='usage_rate_limited'?240_000:0));
+    if(usage.allowed===false)usageDenied.add(target.account_id);else if(usage.allowed===true)usageDenied.delete(target.account_id);
   }
   await api('health',{target_id:target.id,health:!ready?(supported?'needs_login':'unavailable'):usageDenied.has(target.account_id)?'unavailable':'ready'});
   return ready;

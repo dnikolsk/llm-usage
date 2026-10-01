@@ -60,6 +60,7 @@ export type AccountState = {
   status: 'available' | 'partial' | 'error' | 'unknown';
   freshness: 'fresh' | 'stale' | 'seriously_stale' | 'unknown';
   observed_at: string | null; latest_refresh_at: string | null;
+  usage_diagnostic?: string | null;
   limits: UsageBucket[];
 };
 

@@ -27,9 +27,10 @@ function publicJob(row: Record<string, unknown>): Record<string, unknown> & { id
 }
 export async function listExecutionAccounts() {
   return using(async sql => {
-    const accounts = await sql`SELECT id, provider, label, account_type, enabled FROM accounts ORDER BY id`;
+    const accounts = await sql<{id:string;provider:string;label:string;account_type:string;enabled:boolean}[]>`SELECT id, provider, label, account_type, enabled FROM accounts ORDER BY id`;
     const targets = await sql`SELECT registration, health, observed_at, cooldown_until FROM execution_targets ORDER BY id`;
-    return { accounts, targets };
+    const usage=await getStatus();
+    return { accounts:accounts.map(account=>({...account,usage:usage.accounts.find(a=>a.id===account.id)??null})), targets };
   });
 }
 export async function registerAccount(input: { id: string; provider: string; label: string; account_type: string }) {

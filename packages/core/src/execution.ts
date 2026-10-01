@@ -42,7 +42,7 @@ export type DecisionCandidate = {
   usage: 'measured' | 'estimated' | 'unknown'; remaining_fraction: number | null;
   usable_fraction: number | null; reset_at: string | null; seconds_until_reset: number | null;
   reset_pressure: number | null;
-  buckets: { kind: string; remaining_fraction: number | null; reset_at: string | null;
+  buckets: { id:string; scope:string; observed_at:string; source:string; confidence:string; kind: string; remaining_fraction: number | null; reset_at: string | null;
     seconds_until_reset: number | null; usable_fraction: number | null; usable_per_hour: number | null }[];
 };
 
@@ -69,11 +69,13 @@ export function decideExecution(accounts: ExecutionAccount[], targets: Execution
     if (target.busy) exclusions.push('account_busy');
     if (target.billing !== 'subscription') exclusions.push(target.billing === 'paid' ? 'spending_approval_required' : 'billing_unverified');
     let usage: DecisionCandidate['usage'] = 'unknown';
+    if(account?.status==='error')warnings.push('usage_collection_failed');
+    if(account?.usage_diagnostic)warnings.push(account.usage_diagnostic);
     const limits = account?.limits.filter(b => b.scope === 'all_models' || (request.model_class ? b.scope === request.model_class : false)) ?? [];
     const buckets = limits.map(b => {
       const seconds = b.reset_at ? Math.floor((Date.parse(b.reset_at) - now.getTime()) / 1000) : null;
       const age = now.getTime() - Date.parse(b.observed_at);
-      const valid = Number.isFinite(age) && age >= -60_000 && age <= 600_000 && (seconds === null || seconds > 0);
+      const valid = account?.status !== 'error' && Number.isFinite(age) && age >= -60_000 && age <= 600_000 && (seconds === null || seconds > 0);
       // A known exhaustion before its reported reset is retained even when telemetry becomes stale.
       if (b.remaining_fraction !== null && b.remaining_fraction <= 0 && (seconds === null || seconds > 0)) exclusions.push(`exhausted:${b.kind}`);
       const remaining = valid ? b.remaining_fraction : null;
@@ -81,7 +83,7 @@ export function decideExecution(accounts: ExecutionAccount[], targets: Execution
       const usable = remaining === null ? null : Math.max(0, remaining - reserve);
       if (remaining !== null && remaining <= reserve) exclusions.push(`reserve:${b.kind}`);
       if (!valid) warnings.push(seconds !== null && seconds <= 0 ? 'reset_passed_recheck_on_use' : 'stale_usage');
-      return { kind: b.kind, remaining_fraction: remaining, reset_at: b.reset_at,
+      return { id:b.id,scope:b.scope,observed_at:b.observed_at,source:b.source,confidence:b.confidence,kind: b.kind, remaining_fraction: remaining, reset_at: b.reset_at,
         seconds_until_reset: seconds === null ? null : Math.max(0, seconds), usable_fraction: usable,
         usable_per_hour: usable !== null && seconds !== null && seconds > 0 ? usable / Math.max(seconds / 3600, .25) : null };
     });

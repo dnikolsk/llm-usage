@@ -1,7 +1,7 @@
 import {beforeAll,afterAll,describe,it,expect} from 'vitest';
 import {readFile} from 'node:fs/promises';
 import {connectSql} from '@llm-usage/db';
-import {jobRequest} from '@llm-usage/core';
+import {jobRequest,ingestSnapshot} from '@llm-usage/core';
 import * as store from '../src/execution-store';
 const enabled=process.env.RUN_DB_INTEGRATION==='1';
 const schema=`execution_test_${process.pid}`;
@@ -50,4 +50,23 @@ describe.skipIf(!enabled)('PostgreSQL execution lifecycle',()=>{
   const unavailable=await store.planTask({...request,continue_job_id:next!.id as string,execution:'cloud'});
   expect(unavailable.selected).toBeNull();expect(unavailable.steps.at(-1)?.step).toBe('handoff_required');
  });
+ it('exposes collected quotas through MCP account data and stops trusting a failed refresh',async()=>{
+  await store.registerAccount({id:'quota-personal',provider:'anthropic',label:'Quota fixture',account_type:'personal'});
+  await store.registerTarget({id:'quota-local',account_id:'quota-personal',worker_id:'quota-worker',mode:'local',repositories:['quota-repo'],model_classes:[],setup_minutes:0,billing:'subscription'});
+  await store.reportHealth('quota-worker',{target_id:'quota-local',health:'ready',cooldown_until:null});
+  const observed=new Date().toISOString();
+  await store.reportUsage('quota-worker',ingestSnapshot.parse({account_id:'quota-personal',provider:'anthropic',observed_at:observed,status:'ok',limits:[{
+   id:'five_hour',account_id:'quota-personal',kind:'session',scope:'all_models',unit:'fraction',observed_at:observed,
+   remaining_fraction:.8,used_fraction:.2,reset_at:new Date(Date.now()+3600000).toISOString(),source:'local_collector',confidence:'provider_reported'
+  }]}));
+  const listed=(await store.listExecutionAccounts()).accounts.find(a=>a.id==='quota-personal');
+  expect(listed?.usage?.limits[0].remaining_fraction).toBe(.8);
+  const request=jobRequest.parse({repository:'quota-repo',prompt:'Fixture'});
+  expect((await store.planTask(request)).selected?.usage).toBe('measured');
+  await store.reportUsage('quota-worker',ingestSnapshot.parse({account_id:'quota-personal',provider:'anthropic',observed_at:new Date(Date.now()+1).toISOString(),status:'error',limits:[],metadata:{diagnostic_code:'usage_auth_required'}}));
+  const failed=(await store.listExecutionAccounts()).accounts.find(a=>a.id==='quota-personal');
+  expect(failed?.usage?.usage_diagnostic).toBe('usage_auth_required');
+  expect((await store.planTask(request)).selected?.usage).toBe('unknown');
+ });
+
 });
