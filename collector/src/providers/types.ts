@@ -29,7 +29,7 @@ export function providerEnvironment(target:Target):NodeJS.ProcessEnv {
   env.XDG_CONFIG_HOME=target.auth_dir+'/config';
   if(target.provider==='openai') env.CODEX_HOME=target.auth_dir;
   if(target.provider==='anthropic') env.CLAUDE_CONFIG_DIR=target.auth_dir;
-  if(target.provider==='cursor'){env.CURSOR_CONFIG_DIR=target.auth_dir;env.CURSOR_AGENT_STORE_DIR=target.auth_dir+'/sessions';}
+  if(target.provider==='cursor'){env.AGENT_CLI_CREDENTIAL_STORE='file';env.CURSOR_CONFIG_DIR=target.auth_dir;env.CURSOR_AGENT_STORE_DIR=target.auth_dir+'/sessions';}
   return env;
 }
 export function command(target:Target):Run {

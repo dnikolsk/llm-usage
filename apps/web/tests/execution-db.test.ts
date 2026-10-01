@@ -81,7 +81,7 @@ describe.skipIf(!enabled)('PostgreSQL execution lifecycle',()=>{
   expect((await store.planTask({...request,model_class:'reasoning'})).selected).toBeNull();
   await store.submitJob(request,'pool-idempotency-fixture');
   const claim=await store.claimJob('pool-worker');
-  expect(claim?.decision).toMatchObject({selected:{model:'auto',quota_scope:'cursor_auto'}});
+  expect((await store.getJob(claim!.id)).decision).toMatchObject({selected:{model:'auto',quota_scope:'cursor_auto'}});
   await store.finishJob('pool-worker',claim!.id,claim!.lease_token,{state:'succeeded',summary:'Fixture',session_id:'pool-session'});
   expect((await store.planTask({...request,continue_job_id:claim!.id})).selected).toMatchObject({model:'auto',continuation:true});
  });

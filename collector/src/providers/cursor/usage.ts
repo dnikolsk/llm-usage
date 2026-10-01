@@ -1,5 +1,6 @@
 import {readFile} from 'node:fs/promises';
 import {join} from 'node:path';
+import {homedir} from 'node:os';
 import {z} from 'zod';
 import {ingestSnapshot} from '@llm-usage/core';
 import type {Target} from '../types';
@@ -33,12 +34,16 @@ export function normalizeUsage(raw:unknown,accountId:string,now=new Date(),planI
   return{allowed:null,snapshot:ingestSnapshot.parse({account_id:accountId,provider:'cursor',observed_at:observed,status:'ok',limits,
     metadata:{adapter_version:'cursor-dashboard-v1'}})};
 }
+export function credentialPath(target:Target,platform:string=process.platform,home=homedir()){
+  if(!['linux','darwin'].includes(platform))throw new Error('usage_credential_store_unsupported');
+  return platform==='darwin'?join(home,'.cursor','auth.json'):join(target.auth_dir,'config','cursor','auth.json');
+}
 export async function readUsage(target:Target){
-  if(process.platform!=='linux')throw new Error('usage_credential_store_unsupported');
+  const authFile=credentialPath(target);
   // The Linux CLI credential store uses XDG_CONFIG_HOME/cursor/auth.json,
   // independently of CURSOR_CONFIG_DIR. Read only; token refresh remains CLI-owned.
   const credentials=z.object({accessToken:z.string().min(1),apiKey:z.string().nullish()})
-    .parse(JSON.parse(await readFile(join(target.auth_dir,'config','cursor','auth.json'),'utf8')));
+    .parse(JSON.parse(await readFile(authFile,'utf8')));
   if(credentials.apiKey)throw new Error('usage_subscription_login_required');
   const request=(method:string)=>usageJson(`https://api2.cursor.sh/aiserver.v1.DashboardService/${method}`,{
     method:'POST',headers:{Authorization:`Bearer ${credentials.accessToken}`,'Content-Type':'application/json','Connect-Protocol-Version':'1','x-cursor-client-type':'cli'},body:'{}'});

@@ -3,7 +3,7 @@ import {mkdtemp,writeFile,mkdir,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {normalizeUsage as claude,readUsage as readClaude} from '../src/providers/claude/usage';
-import {normalizeUsage as cursor,readUsage as readCursor} from '../src/providers/cursor/usage';
+import {normalizeUsage as cursor,readUsage as readCursor,credentialPath} from '../src/providers/cursor/usage';
 import {collectUsage} from '../src/usage';
 import {usageJson} from '../src/providers/usage-http';
 import type {Target} from '../src/providers/types';
@@ -73,4 +73,12 @@ describe('conflicting Cursor amounts',()=>{
   const snapshot=cursor({...cursorRaw,planUsage:{...cursorRaw.planUsage,limit:7000,includedSpend:7000,totalPercentUsed:8.5}},'cursor-personal',now).snapshot;
   expect(snapshot.limits[0]).toMatchObject({remaining_fraction:.915,unit:'fraction',used:null,limit:null,remaining:null,metadata:{diagnostic_code:'usage_amount_percentage_conflict'}});
  });
+});
+
+
+it('matches the official Cursor file-store locations on Mac and Linux',()=>{
+ const target={auth_dir:'/accounts/cursor'} as Target;
+ expect(credentialPath(target,'linux','/users/test')).toBe('/accounts/cursor/config/cursor/auth.json');
+ expect(credentialPath(target,'darwin','/users/test')).toBe('/users/test/.cursor/auth.json');
+ expect(()=>credentialPath(target,'win32')).toThrow('usage_credential_store_unsupported');
 });
