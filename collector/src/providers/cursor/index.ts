@@ -14,7 +14,7 @@ export async function authenticated(run:Run) {
   return models.code===0 && /Available models/.test(models.stdout);
 }
 export function localArgs(session?:string) {
-  return ['-p','--output-format','stream-json','--sandbox','enabled',...(session?['--resume',session]:[])];
+  return ['-p','--output-format','stream-json','--sandbox','enabled','--trust',...(session?['--resume',session]:[])];
 }
 export function localResult(stdout:string) {
   const result=jsonLines(stdout).reverse().find(e=>e.type==='result');

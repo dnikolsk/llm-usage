@@ -34,6 +34,17 @@ describe('official CLI boundaries',()=>{
       :{code,stdout,stderr:''})).toBe(expected);
   }
  });
+ it('uses headless Cursor args with trust and sandbox, never force or yolo',()=>{
+  expect(cursor.localArgs()).toEqual(['-p','--output-format','stream-json','--sandbox','enabled','--trust']);
+  expect(cursor.localArgs('sess-1')).toEqual(['-p','--output-format','stream-json','--sandbox','enabled','--trust','--resume','sess-1']);
+  for (const args of [cursor.localArgs(), cursor.localArgs('sess-1')]) {
+    expect(args).toContain('--sandbox');
+    expect(args).toContain('enabled');
+    expect(args).toContain('--trust');
+    expect(args).not.toContain('--force');
+    expect(args).not.toContain('--yolo');
+  }
+ });
  it('does not mistake an exit code for task completion',()=>{
   expect(codex.localResult('{"type":"error"}').complete).toBe(false);
   expect(claude.localResult('{"type":"result","subtype":"error_max_turns"}').complete).toBe(false);
