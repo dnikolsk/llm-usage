@@ -1,0 +1,53 @@
+import {beforeAll,afterAll,describe,it,expect} from 'vitest';
+import {readFile} from 'node:fs/promises';
+import {connectSql} from '@llm-usage/db';
+import {jobRequest} from '@llm-usage/core';
+import * as store from '../src/execution-store';
+const enabled=process.env.RUN_DB_INTEGRATION==='1';
+const schema=`execution_test_${process.pid}`;
+const original=process.env.DATABASE_URL;
+let sql:ReturnType<typeof connectSql>;
+describe.skipIf(!enabled)('PostgreSQL execution lifecycle',()=>{
+ beforeAll(async()=>{
+  sql=connectSql();await sql.unsafe(`CREATE SCHEMA ${schema}`);
+  const url=new URL(original!);url.searchParams.set('search_path',schema);process.env.DATABASE_URL=url.toString();
+  const test=connectSql();try{
+   for(const name of ['0001_initial.sql','0002_execution.sql'])await test.unsafe(await readFile(new URL(`../../../packages/db/migrations/${name}`,import.meta.url),'utf8'));
+  }finally{await test.end();}
+ });
+ afterAll(async()=>{process.env.DATABASE_URL=original;await sql.unsafe(`DROP SCHEMA ${schema} CASCADE`);await sql.end();});
+ it('registers, enforces billing, deduplicates, leases one account and holds uncertain work',async()=>{
+  await store.registerAccount({id:'test-personal',provider:'openai',label:'Test',account_type:'personal'});
+  const registration={id:'test-local',account_id:'test-personal',worker_id:'test-worker',mode:'local' as const,repositories:['test-repo'],model_classes:[],setup_minutes:0,billing:'unknown' as const};
+  await store.registerTarget(registration);
+  await store.reportHealth('test-worker',{target_id:'test-local',health:'ready',cooldown_until:null});
+  const request=jobRequest.parse({repository:'test-repo',prompt:'A test task'});
+  expect((await store.planTask(request)).selected).toBeNull();
+  await store.registerTarget({...registration,billing:'subscription'});
+  await store.reportHealth('test-worker',{target_id:'test-local',health:'ready',cooldown_until:null});
+  await expect(store.reportHealth('wrong-worker',{target_id:'test-local',health:'ready',cooldown_until:null})).rejects.toThrow('target_not_owned');
+  const [first,retry]=await Promise.all([store.submitJob(request,'test-idempotency-123'),store.submitJob(request,'test-idempotency-123')]);
+  expect(first.id).toBe(retry.id);
+  await expect(store.submitJob({...request,prompt:'different'},'test-idempotency-123')).rejects.toThrow('idempotency_conflict');
+  const second=await store.submitJob(request,'test-idempotency-456');
+  const claims=await Promise.all([store.claimJob('test-worker'),store.claimJob('test-worker')]);
+  expect(claims.filter(Boolean)).toHaveLength(1);const claim=claims.find(Boolean)!;
+  const visible=await store.getJob(claim.id as string);expect(visible).not.toHaveProperty('lease_token');
+  await expect(store.finishJob('wrong-worker',claim.id as string,claim.lease_token,{state:'succeeded',summary:'fake'})).rejects.toThrow('lease_lost');
+  await store.cancelJob(claim.id as string);
+  expect((await store.heartbeatJob('test-worker',claim.id as string,claim.lease_token)).cancel_requested).toBe(true);
+  const test=connectSql();try{await test`UPDATE execution_jobs SET lease_until=now()-interval '1 second' WHERE id=${claim.id as string}`;}finally{await test.end();}
+  expect(await store.claimJob('test-worker')).toBeNull();
+  expect((await store.getJob(claim.id as string)).state).toBe('needs_review');
+  await expect(store.finishJob('test-worker',claim.id as string,claim.lease_token,{state:'succeeded',summary:'late'})).rejects.toThrow('lease_lost');
+  await store.resolveJob(claim.id as string,{state:'cancelled',summary:'Operator verified no task is running.'});
+  const handoff=await store.planTask({...request,continue_job_id:claim.id as string});
+  expect(handoff.selected).toBeNull();expect(handoff.steps.at(-1)?.step).toBe('handoff_required');
+  const next=await store.claimJob('test-worker');expect(next).not.toBeNull();
+  expect(next!.id).toBe(second.id===claim.id?first.id:second.id);
+  await store.finishJob('test-worker',next!.id as string,next!.lease_token,{state:'succeeded',summary:'Done',session_id:'session-test'});
+  const continued=await store.planTask({...request,continue_job_id:next!.id as string});expect(continued.selected?.continuation).toBe(true);
+  const unavailable=await store.planTask({...request,continue_job_id:next!.id as string,execution:'cloud'});
+  expect(unavailable.selected).toBeNull();expect(unavailable.steps.at(-1)?.step).toBe('handoff_required');
+ });
+});
