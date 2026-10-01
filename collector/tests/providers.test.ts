@@ -17,6 +17,23 @@ describe('official CLI boundaries',()=>{
  it('requires an authenticated Cursor response',async()=>{
   expect(await cursor.authenticated(result(JSON.stringify({isAuthenticated:false,hasAccessToken:false})))).toBe(false);
  });
+ it('rejects cached Cursor login when the backend rejects tokens',async()=>{
+  const calls:string[][]=[];
+  expect(await cursor.authenticated(async args=>{
+    calls.push(args);
+    return args[0]==='status'
+      ?{code:0,stdout:JSON.stringify({isAuthenticated:true,hasAccessToken:true,message:'Logged in (unable to fetch user details)'}),stderr:''}
+      :{code:1,stdout:'',stderr:'Authentication failed: credentials invalid or expired'};
+  })).toBe(false);
+  expect(calls).toEqual([['status','--format','json'],['models']]);
+ });
+ it('requires a live nonempty model list for Cursor readiness',async()=>{
+  for(const [stdout,code,expected] of [['Available models\nsonnet - Sonnet',0,true],['No models available for this account.',0,false],['Available models',1,false]] as const){
+    expect(await cursor.authenticated(async args=>args[0]==='status'
+      ?{code:0,stdout:JSON.stringify({isAuthenticated:true,hasAccessToken:true}),stderr:''}
+      :{code,stdout,stderr:''})).toBe(expected);
+  }
+ });
  it('does not mistake an exit code for task completion',()=>{
   expect(codex.localResult('{"type":"error"}').complete).toBe(false);
   expect(claude.localResult('{"type":"result","subtype":"error_max_turns"}').complete).toBe(false);

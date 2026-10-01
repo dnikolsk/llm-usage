@@ -38,6 +38,18 @@ Phone links use an inline HTML response and a `.html` path. The form includes an
 
 The worker requires an administrator-confirmed `billing: "subscription"` target before it can receive a task. Keep billing `unknown` until the account's included allowance and extra-usage settings are verified. Disable provider overage/automatic credits if additional spending must always require permission; login alone does not prove that setting. Re-register to update the target after verification. API-key credentials inherited from the host are deliberately not passed to provider clients. No paid API fallback or credit purchase is implemented: planning reports approval required and tasks remain queued.
 
+### Cursor says logged in but rejects tokens
+
+Cursor's `status --format json` can return `isAuthenticated: true` when stored tokens exist even if fetching the user from the server fails. The worker therefore also runs the official `models` command and requires a successful available-model list before reporting readiness. This checks backend authentication without running an inference task. A network failure or an account with no available models also prevents readiness; this check does not prove remaining subscription allowance.
+
+For stale or rejected tokens, pause the worker while idle, then reconnect the configured account from the repository root using the same worker configuration:
+
+```sh
+pnpm --filter @llm-usage/collector connect /absolute/path/worker.json cursor-personal --reconnect
+```
+
+This runs official Cursor logout and login in that account's configured credential directory, prints the phone browser link, then checks backend model access. It does not modify Claude or Codex credentials or use an API key. Complete the new browser flow, wait for `Cursor backend accepted the login and returned available models.`, then restart the worker. If verification still fails, investigate the Cursor service/network and CLI version rather than copying tokens or treating local status as success. Existing uncertain jobs still require review; reconnecting does not replay them.
+
 ## Step-by-step decision
 
 `POST /v1/execution/plan` (JOB_TOKEN) accepts `repository`, optional `provider` (`anthropic`, `openai`, `cursor`), `account_id`, `execution` (`auto`, `local`, `cloud`), `scope`, `model_class`, `estimated_minutes`, and `continue_job_id`.
