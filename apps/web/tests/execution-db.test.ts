@@ -69,4 +69,21 @@ describe.skipIf(!enabled)('PostgreSQL execution lifecycle',()=>{
   expect((await store.planTask(request)).selected?.usage).toBe('unknown');
  });
 
+ it('persists concrete Cursor model/pool selection through claim and continuation',async()=>{
+  await store.registerAccount({id:'pool-personal',provider:'cursor',label:'Pool fixture',account_type:'personal'});
+  await store.registerTarget({id:'pool-local',account_id:'pool-personal',worker_id:'pool-worker',mode:'local',repositories:['pool-repo'],model_classes:['reasoning'],models:{reasoning:'sonnet-4'},setup_minutes:0,billing:'subscription'});
+  await store.reportHealth('pool-worker',{target_id:'pool-local',health:'ready',cooldown_until:null});
+  const observed=new Date().toISOString();
+  await store.reportUsage('pool-worker',ingestSnapshot.parse({account_id:'pool-personal',provider:'cursor',observed_at:observed,status:'ok',limits:
+   [['all_models',.915],['cursor_auto',.999],['cursor_api',0]].map(([scope,remaining])=>({id:String(scope),account_id:'pool-personal',kind:'subscription',scope,unit:'fraction',observed_at:observed,
+    remaining_fraction:remaining,reset_at:new Date(Date.now()+3600000).toISOString(),source:'local_collector',confidence:'provider_reported'}))}));
+  const request=jobRequest.parse({repository:'pool-repo',prompt:'Fixture'});
+  expect((await store.planTask({...request,model_class:'reasoning'})).selected).toBeNull();
+  await store.submitJob(request,'pool-idempotency-fixture');
+  const claim=await store.claimJob('pool-worker');
+  expect(claim?.decision).toMatchObject({selected:{model:'auto',quota_scope:'cursor_auto'}});
+  await store.finishJob('pool-worker',claim!.id,claim!.lease_token,{state:'succeeded',summary:'Fixture',session_id:'pool-session'});
+  expect((await store.planTask({...request,continue_job_id:claim!.id})).selected).toMatchObject({model:'auto',continuation:true});
+ });
+
 });

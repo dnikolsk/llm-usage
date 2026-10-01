@@ -11,6 +11,6 @@ async function post(path:string,body:unknown){
 for(const target of config.targets){
  await post('accounts',{id:target.account_id,provider:target.provider,label:target.label??target.account_id,account_type:target.account_type});
  await post('targets',{id:target.id,account_id:target.account_id,worker_id:config.worker_id,mode:target.mode,repositories:Object.keys(target.repositories),
-  model_classes:Object.keys(target.models),setup_minutes:target.setup_minutes,billing:target.billing});
+  model_classes:Object.keys(target.models),models:target.models,...(target.default_model?{default_model:target.default_model}:{}),setup_minutes:target.setup_minutes,billing:target.billing});
  console.log(`Registered ${target.account_id}: ${target.id}. Login and billing readiness are checked separately.`);
 }

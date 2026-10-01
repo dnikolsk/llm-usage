@@ -67,3 +67,10 @@ describe('provider usage normalization',()=>{
   await expect(usageJson('https://api.anthropic.com/api/oauth/usage',{})).rejects.toThrow('usage_rate_limited');
  });
 });
+
+describe('conflicting Cursor amounts',()=>{
+ it('retains reported percentages while omitting contradictory monetary balances',()=>{
+  const snapshot=cursor({...cursorRaw,planUsage:{...cursorRaw.planUsage,limit:7000,includedSpend:7000,totalPercentUsed:8.5}},'cursor-personal',now).snapshot;
+  expect(snapshot.limits[0]).toMatchObject({remaining_fraction:.915,unit:'fraction',used:null,limit:null,remaining:null,metadata:{diagnostic_code:'usage_amount_percentage_conflict'}});
+ });
+});

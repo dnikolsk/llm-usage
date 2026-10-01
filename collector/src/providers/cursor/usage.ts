@@ -19,10 +19,13 @@ export function normalizeUsage(raw:unknown,accountId:string,now=new Date(),planI
     else if(b.remaining!==undefined)percent=(1-Math.min(b.remaining,b.limit)/b.limit)*100;
   }
   if(percent===undefined)throw new Error('usage_schema_unrecognized');
+  const amountPercent=b.limit!==undefined&&b.limit>0&&b.includedSpend!==undefined?b.includedSpend/b.limit*100:undefined;
+  const conflicting=amountPercent!==undefined&&b.totalPercentUsed!==undefined&&Math.abs(amountPercent-b.totalPercentUsed)>2;
   const observed=now.toISOString();
   const definitions=[['included','all_models',percent],['auto','cursor_auto',b.autoPercentUsed],['api','cursor_api',b.apiPercentUsed]] as const;
   const limits=definitions.flatMap(([id,scope,value])=>value===undefined?[]:[{id,account_id:accountId,kind,scope,unit:'fraction',
-    ...(id==='included'&&b.limit!==undefined&&b.limit>0&&b.includedSpend!==undefined&&b.includedSpend<=b.limit?{unit:'usd_cents',limit:b.limit,used:b.includedSpend,remaining:Math.max(0,b.limit-b.includedSpend)}:{}),
+    ...(id==='included'&&!conflicting&&b.limit!==undefined&&b.limit>0&&b.includedSpend!==undefined&&b.includedSpend<=b.limit?{unit:'usd_cents',limit:b.limit,used:b.includedSpend,remaining:Math.max(0,b.limit-b.includedSpend)}:{}),
+    metadata:id==='included'&&conflicting?{diagnostic_code:'usage_amount_percentage_conflict'}:{},
     used_fraction:Math.min(1,value/100),remaining_fraction:Math.max(0,1-value/100),observed_at:observed,
     window_started_at:data.billingCycleStart===undefined||info?.includedUsageResetsAt!==undefined?null:new Date(data.billingCycleStart).toISOString(),
     reset_at:new Date(reset).toISOString(),source:'local_collector',confidence:'provider_reported'}]);

@@ -21,6 +21,8 @@ export const targetRegistration = z.object({
   id: identifier, account_id: identifier, worker_id: identifier, mode: executionMode,
   repositories: z.array(identifier).min(1).max(100),
   model_classes: z.array(identifier).max(30).default([]),
+  models:z.record(identifier,z.string().min(1).max(160)).optional(),
+  default_model:z.string().min(1).max(160).optional(),
   setup_minutes: z.number().int().min(0).max(1440).default(0),
   billing: z.enum(['subscription', 'paid', 'unknown']).default('unknown'),
 }).strict();
@@ -35,9 +37,10 @@ export type ExecutionTarget = TargetRegistration & {
   cooldown_until: string | null; busy: boolean;
 };
 export type ExecutionAccount = AccountState & { account_type: string };
-export type Continuation = { target_id: string; account_id: string; repository: string; resumable: boolean };
+export type Continuation = { target_id: string; account_id: string; repository: string; resumable: boolean; model?:string|null };
 export type DecisionCandidate = {
   target_id: string; account_id: string; provider: string; execution: 'local' | 'cloud';
+  model:string|null; quota_scope:string|null;
   exclusions: string[]; warnings: string[]; continuation: boolean; setup_minutes: number;
   usage: 'measured' | 'estimated' | 'unknown'; remaining_fraction: number | null;
   usable_fraction: number | null; reset_at: string | null; seconds_until_reset: number | null;
@@ -54,6 +57,14 @@ export function decideExecution(accounts: ExecutionAccount[], targets: Execution
   const candidates: DecisionCandidate[] = targets.map(target => {
     const account = accounts.find(a => a.id === target.account_id);
     const exclusions: string[] = [], warnings: string[] = [];
+    const previous=options.continuation?.target_id===target.id?options.continuation:undefined;
+    const model=request.model_class?target.models?.[request.model_class]??null:
+      previous?.model??target.default_model??(account?.provider==='cursor'?'auto':null);
+    const quotaScope=account?.provider==='cursor'?(model==='auto'?'cursor_auto':model?'cursor_api':null):
+      account?.provider==='anthropic'?(model?.toLowerCase().includes('sonnet')?'sonnet':model?.toLowerCase().includes('opus')?'opus':null):null;
+    if(request.model_class&&!model)exclusions.push('model_binding_missing');
+    if(target.mode==='cloud'&&model)exclusions.push('cloud_model_binding_unsupported');
+    if(previous?.resumable&&account?.provider==='cursor'&&(!previous.model||previous.model!==model))exclusions.push('continuation_model_handoff_required');
     if (!account?.enabled) exclusions.push('account_disabled_or_missing');
     if (account && account.account_type !== request.scope) exclusions.push('account_scope_mismatch');
     if (request.provider && account?.provider !== request.provider) exclusions.push('provider_override');
@@ -71,7 +82,13 @@ export function decideExecution(accounts: ExecutionAccount[], targets: Execution
     let usage: DecisionCandidate['usage'] = 'unknown';
     if(account?.status==='error')warnings.push('usage_collection_failed');
     if(account?.usage_diagnostic)warnings.push(account.usage_diagnostic);
-    const limits = account?.limits.filter(b => b.scope === 'all_models' || (request.model_class ? b.scope === request.model_class : false)) ?? [];
+    const limits = account?.limits.filter(b => b.scope === 'all_models' || b.scope===quotaScope ||
+      (request.model_class ? b.scope === request.model_class : false) ||
+      (account.provider==='anthropic'&&!quotaScope&&['sonnet','opus'].includes(b.scope))) ?? [];
+    // A combined Cursor percentage cannot prove a specific pool has capacity.
+    const missingPool=account?.provider==='cursor'&&!limits.some(b=>b.scope===quotaScope);
+    if(missingPool){warnings.push('model_pool_capacity_unknown');exclusions.push('model_pool_capacity_unknown');}
+    for(const b of limits)if(b.metadata.diagnostic_code)warnings.push(b.metadata.diagnostic_code);
     const buckets = limits.map(b => {
       const seconds = b.reset_at ? Math.floor((Date.parse(b.reset_at) - now.getTime()) / 1000) : null;
       const age = now.getTime() - Date.parse(b.observed_at);
@@ -95,7 +112,7 @@ export function decideExecution(accounts: ExecutionAccount[], targets: Execution
     const next = buckets.filter(b => (b.seconds_until_reset ?? 0) > 0).sort((a,b) => a.seconds_until_reset! - b.seconds_until_reset!)[0];
     if (next && next.seconds_until_reset! < request.estimated_minutes * 60) warnings.push('reset_during_estimated_task');
     const continuation = options.continuation;
-    return { target_id: target.id, account_id: target.account_id, provider: account?.provider ?? 'unknown', execution: target.mode,
+    return { model,quota_scope:quotaScope,target_id: target.id, account_id: target.account_id, provider: account?.provider ?? 'unknown', execution: target.mode,
       exclusions: [...new Set(exclusions)], warnings: [...new Set(warnings)], setup_minutes: target.setup_minutes,
       continuation: !!continuation?.resumable && continuation.repository === request.repository && continuation.target_id === target.id && continuation.account_id === target.account_id,
       usage, remaining_fraction: allKnown ? Math.min(...buckets.map(b => b.remaining_fraction!)) : null,
@@ -109,6 +126,7 @@ export function decideExecution(accounts: ExecutionAccount[], targets: Execution
     const matching = pool.filter(predicate); if (matching.length) pool = matching; record(step, explanation);
   };
   record('eligibility', 'Honor account/provider/location overrides, scope, repository/model support, live login, account lease, cooldown, billing and quota reserves.');
+  record('model_pool', 'Pin the concrete model before comparing its applicable quota pools. Cursor defaults to Auto; missing pool evidence cannot be replaced by an aggregate percentage.');
   prefer('continuity', 'Continue verified work on its existing account and execution target when eligible.', c => c.continuation);
   prefer('readiness', 'Prefer environments already set up for this repository; local is not inherently better than cloud.', c => c.setup_minutes === 0);
   prefer('usage_evidence', 'Prefer fresh measured quota, then estimates; unknown quota stays explicit and may be tried when no better evidence exists.', c => c.usage === 'measured');

@@ -72,7 +72,7 @@ async function snapshot(sql: Sql, request: TaskSpec) {
     if (!previous || previous.request.repository !== request.repository) throw new ExecutionError('invalid_continuation');
     if (['queued','running','needs_review'].includes(previous.state)) throw new ExecutionError('continuation_still_active');
     continuation = { target_id: previous.target_id, account_id: previous.account_id,
-      repository: request.repository, resumable: !!previous.result?.session_id };
+      repository: request.repository, resumable: !!previous.result?.session_id, model:previous.decision?.selected?.model??null };
   }
   const decision = decideExecution(accounts, executionTargets, request, { reserves: policy.reserves, continuation });
   if (request.continue_job_id && (!continuation?.resumable || decision.selected?.target_id !== continuation.target_id)) {

@@ -9,6 +9,7 @@ export const workerConfig = z.object({
     label:z.string().min(1).max(100).optional(), account_type:z.enum(['personal','work']).default('personal'),
     billing:z.enum(['subscription','paid','unknown']).default('unknown'), setup_minutes:z.number().int().min(0).default(0),
     mode:z.enum(['local','cloud']), binary:z.string().startsWith('/'), auth_dir:z.string().startsWith('/'),
+    default_model:z.string().min(1).max(160).optional(),
     models:z.record(z.string(),z.string().min(1)).default({}),
     repositories:z.record(z.string(),z.object({path:z.string().startsWith('/'),cloud_environment:z.string().optional(),branch:z.string().optional()})),
   }).strict()).min(1),

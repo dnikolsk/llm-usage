@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { workerConfig, command, type Target } from './providers/types';
 import * as codex from './providers/codex/index';
 import {collectUsage} from './usage';
+import {executionModel} from './execution-model';
 import * as claude from './providers/claude/index';
 import * as cursor from './providers/cursor/index';
 const config=workerConfig.parse(JSON.parse(await readFile(process.argv[2]??'', 'utf8')));
@@ -98,11 +99,8 @@ async function execute(job:any,target:Target){
       const provider=adapter(target);
       const baseRevision=(await git(['rev-parse','HEAD'],workspace)).trim();
       const args=provider.localArgs(job.continuation_session??undefined);
-      if(job.request.model_class){
-        const model=target.models[job.request.model_class];if(!model)throw new Error('model_not_configured');
-        // Provider flags precede the positional prompt/session arguments.
-        args.splice(target.provider==='openai'?1:0,0,'--model',model);
-      }
+      const model=executionModel(target,job);
+      if(model)args.splice(target.provider==='openai'?1:0,0,'--model',model);
       const response=await run(args,{input:job.request.prompt,cwd:workspace,timeout:3_600_000,signal:controller.signal});
       const parsed=provider.localResult(response.stdout);
       await git(['add','-N','.'],workspace);

@@ -83,4 +83,39 @@ describe('execution decision stages',()=>{
  it('does not pretend model-specific quota applies to every model',()=>{
   const a=account('specific');a.limits[0].scope='special-model';expect(decide([a],[target(a.id)]).selected?.usage).toBe('unknown');
  });
+ it('binds Cursor Auto to its own pool and excludes exhausted named-model pools',()=>{
+  const a={...account('cursor',.915),provider:'cursor'};
+  a.limits.push({...a.limits[0],id:'auto',scope:'cursor_auto',remaining_fraction:.999},
+    {...a.limits[0],id:'api',scope:'cursor_api',remaining_fraction:0});
+  const t=target(a.id,{model_classes:['reasoning'],models:{reasoning:'sonnet-4'}});
+  const automatic=decide([a],[t]);
+  expect(automatic.selected).toMatchObject({model:'auto',quota_scope:'cursor_auto',remaining_fraction:.915});
+  expect(automatic.selected?.buckets.map(b=>b.scope)).toEqual(['all_models','cursor_auto']);
+  const named=decide([a],[t],{...task,model_class:'reasoning'});
+  expect(named.selected).toBeNull();expect(named.candidates[0].exclusions).toContain('exhausted:session');
+  a.limits[1].remaining_fraction=0;expect(decide([a],[t]).selected).toBeNull();
+ });
+ it('does not route Cursor on aggregate quota when the selected pool is missing',()=>{
+  const a={...account('cursor',.915),provider:'cursor'};
+  expect(decide([a],[target(a.id)]).candidates[0].exclusions).toContain('model_pool_capacity_unknown');
+ });
+ it('uses concrete Claude model scopes behind generic configured class labels',()=>{
+  const a={...account('claude',.9),provider:'anthropic'};
+  a.limits.push({...a.limits[0],id:'opus',scope:'opus',remaining_fraction:0});
+  const t=target(a.id,{models:{reasoning:'claude-opus-4'},model_classes:['reasoning'],default_model:'sonnet'});
+  expect(decide([a],[t]).selected?.model).toBe('sonnet');
+  expect(decide([a],[t],{...task,model_class:'reasoning'}).selected).toBeNull();
+ });
+ it('retains the Cursor continuation pool and requires handoff instead of silently changing it',()=>{
+  const a={...account('cursor',.9),provider:'cursor'};
+  a.limits.push({...a.limits[0],id:'auto',scope:'cursor_auto',remaining_fraction:.9},{...a.limits[0],id:'api',scope:'cursor_api',remaining_fraction:0});
+  const t=target(a.id);
+  const r=decideExecution([a],[t],task,{now,continuation:{target_id:t.id,account_id:a.id,repository:task.repository,resumable:true,model:'sonnet-4'}});
+  expect(r.selected).toBeNull();expect(r.candidates[0].quota_scope).toBe('cursor_api');
+ });
+ it('surfaces conflicting quota amounts in the routing explanation',()=>{
+  const a=account('codex');a.limits[0].metadata={diagnostic_code:'usage_amount_percentage_conflict'};
+  expect(decide([a],[target(a.id)]).selected?.warnings).toContain('usage_amount_percentage_conflict');
+ });
+
 });
