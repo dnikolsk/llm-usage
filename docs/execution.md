@@ -89,3 +89,20 @@ Expired leases and ambiguous CLI outcomes become `needs_review`, retaining the a
 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`. With a test-capable PostgreSQL role and DATABASE_URL, run `RUN_DB_INTEGRATION=1 pnpm --filter @llm-usage/web exec vitest run tests/execution-db.test.ts`; it creates and drops its own isolated schema. Tests cover routing/reset semantics, MCP SDK calls and HTTP initialization, scoped credentials, atomic/idempotent queue behavior, leases/recovery, provider response parsing, and the phone code handoff. Fake CLI fixtures do not establish that real subscriptions are authenticated.
 
 The final live acceptance test still requires owner sign-in: with the Mac powered off, connect from a phone, submit a coding task, receive changes, restart the worker, and repeat. Tailscale/1Password deployment guidance is in `ai-builder-tools/cloud/README.md`.
+
+### Deployed subscription verification
+
+With the deployed worker running and its existing `JOB_TOKEN` loaded securely, run from this checkout (Node 22+):
+
+```sh
+node scripts/verify-execution.mjs /absolute/path/worker.json /private/path/verification
+node scripts/verify-execution.mjs /absolute/path/worker.json /private/path/verification --run
+```
+
+The first command only reads accounts and plans automatic routing plus explicit Claude, Codex and Cursor routing for `ai-builder-tools`. `plans.json` records exclusions, quota evidence, all applicable reset buckets and each decision step. An unavailable provider is reported without fabricating readiness. The second command submits one small task using automatic routing and real subscription allowance: create a uniquely named text file in the task's repository checkout. Review `changes.patch` for the expected new file and no unintended changes. `job.json` records the actual execution decision (which may differ from preflight), status and result. Success requires both a successful job state and the expected text in a returned patch; it is not a full audit of all changes or proof that every provider can execute.
+
+Use the same output directory to resume after a connection loss or verification-process restart. The request and idempotency key are saved before submission; rerunning retrieves the same task. A ten-minute monitoring timeout leaves the job intact. A `needs_review` outcome requires inspecting the existing job and artifact, not creating a fresh attempt. Output contains task metadata and code; keep the directory private and outside source control. The helper never saves the service token or prints provider credentials. It does not enable billing, reconnect accounts, restart services, or automatically cancel work.
+
+After the first successful task, restart the supervised worker while idle and run with a new output directory to verify a new task can complete without another login. Record a service restart separately from this helper's interrupted-monitoring test. PostgreSQL integration tests exercise lease expiration and prevent replay of uncertain work; a live worker-restart check still needs to happen on the deployed host. Keep real recovery testing away from valuable running jobs.
+
+Helper regression checks: `node --test scripts/verify-execution.test.mjs`.
