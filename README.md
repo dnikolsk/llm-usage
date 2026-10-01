@@ -1,6 +1,10 @@
 # LLM Usage Tracker
 
-Personal subscription capacity tracker with normalized usage snapshots and an explainable router. This first implementation pass provides the backend and a mock collector. The Claude browser adapter and iOS app are subsequent phases.
+## Subscription workers and MCP
+
+The execution service adds personal Claude, Codex and Cursor account registration, staged quota/reset-aware routing, persistent coding tasks, worker adapters and an authenticated MCP endpoint. See [execution setup and limitations](docs/execution.md). Real provider sign-in is separate from the mock demo below. Provider credentials stay on the worker; no unlocked Mac is required by the worker design.
+
+Personal subscription capacity tracker with normalized usage snapshots, an explainable router, and a coding-task execution layer. Real subscription connections require owner authorization; the local usage demo below uses simulated data.
 
 ## Run locally
 
@@ -12,7 +16,7 @@ Personal subscription capacity tracker with normalized usage snapshots and an ex
 
 Mock data is for local development only. Its reset timestamps are derived from run time and labeled `estimated`; real adapters must preserve provider-reported timestamps. The demo account IDs must exist before ingestion.
 
-The mock collector is a one-shot command. It does not install a five-minute scheduler or hold provider login sessions. The live Claude collector, Mac Keychain setup, and launchd job are next work after the backend is deployed and verified.
+The mock collector is a one-shot command. It does not install a scheduler or hold provider login sessions. The separate execution worker manages official CLI calls; automatic Claude/Cursor usage collection remains future work.
 
 Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
 
@@ -22,4 +26,4 @@ Connect `apps/web` as the Vercel project root, attach a Neon Postgres database, 
 
 ## Mac mini handoff
 
-Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The repository does not yet contain a deployed service or real provider adapter.
+Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The execution worker runs as a separate persistent process; Vercel request handlers do not host CLI jobs.

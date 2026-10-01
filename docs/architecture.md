@@ -1,6 +1,8 @@
 # Architecture
 
-Mac collector → authenticated `/v1/ingest` → append-only Postgres snapshots and buckets → authenticated `/v1/status` and deterministic `/v1/route` → future SwiftUI app and widget.
+Usage collector → authenticated `/v1/ingest` → append-only Postgres snapshots and buckets → authenticated `/v1/status` and deterministic `/v1/route` → clients.
+
+The execution layer adds MCP/HTTP task submission, a durable queue, staged provider/account/target selection, and cloud-hosted official CLI workers. See [execution.md](execution.md). The original `/v1/route` remains a quota-only recommendation contract; `/v1/execution/plan` considers live worker health, billing, setup and existing sessions as well as quota.
 
 Account IDs are stable across snapshots and providers may have many accounts. Each ingest writes a complete observation, including `partial` and `error` observations. The status API returns the most recent *successful* (`ok` or `partial`) buckets alongside the latest health result and observed time. On failure, old capacity remains visible but freshness is based on the successful observation, and routing rejects error state. Snapshot IDs and idempotency keys are unique; retrying ingestion cannot duplicate historical observations.
 
