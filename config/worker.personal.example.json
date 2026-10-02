@@ -1,22 +1,19 @@
 {
   "service_url": "http://127.0.0.1:3000",
-  "worker_id": "cloud-dev",
-  "token_env": "WORKER_CLOUD_DEV_TOKEN",
-  "artifact_dir": "/workspace/.cloud-setup/jobs",
+  "worker_id": "worker-1",
+  "token_env": "WORKER_WORKER_1_TOKEN",
+  "artifact_dir": "/absolute/path/worker-state/jobs",
   "targets": [
     {
-      "id": "codex-personal-local",
+      "id": "worker-1-openai-local",
       "account_id": "codex-personal",
       "provider": "openai",
       "mode": "local",
-      "binary": "/workspace/.subscription-workers/clis/node_modules/.bin/codex",
-      "auth_dir": "/workspace/.cloud-setup/accounts/codex-personal",
+      "binary": "/absolute/path/to/codex",
+      "auth_dir": "/absolute/path/worker-state/accounts/codex-personal",
       "repositories": {
-        "llm-usage": {
-          "path": "/workspace/llm-usage"
-        },
-        "ai-builder-tools": {
-          "path": "/workspace/ai-builder-tools"
+        "my-project": {
+          "path": "/absolute/path/my-project"
         }
       },
       "label": "Codex personal",
@@ -24,18 +21,15 @@
       "setup_minutes": 10
     },
     {
-      "id": "claude-personal-local",
+      "id": "worker-1-anthropic-local",
       "account_id": "claude-personal-main",
       "provider": "anthropic",
       "mode": "local",
-      "binary": "/workspace/.subscription-workers/clis/node_modules/.bin/claude",
-      "auth_dir": "/workspace/.cloud-setup/accounts/claude-personal",
+      "binary": "/absolute/path/to/claude",
+      "auth_dir": "/absolute/path/worker-state/accounts/claude-personal",
       "repositories": {
-        "llm-usage": {
-          "path": "/workspace/llm-usage"
-        },
-        "ai-builder-tools": {
-          "path": "/workspace/ai-builder-tools"
+        "my-project": {
+          "path": "/absolute/path/my-project"
         }
       },
       "label": "Claude personal",
@@ -43,23 +37,21 @@
       "setup_minutes": 10
     },
     {
-      "id": "cursor-personal-local",
+      "id": "worker-1-cursor-local",
       "account_id": "cursor-personal",
       "provider": "cursor",
       "mode": "local",
-      "binary": "/workspace/.subscription-workers/cursor-2026.09.28-64d2043/cursor-agent",
-      "auth_dir": "/workspace/.cloud-setup/accounts/cursor-personal",
+      "binary": "/absolute/path/to/cursor-agent",
+      "auth_dir": "/absolute/path/worker-state/accounts/cursor-personal",
       "repositories": {
-        "llm-usage": {
-          "path": "/workspace/llm-usage"
-        },
-        "ai-builder-tools": {
-          "path": "/workspace/ai-builder-tools"
+        "my-project": {
+          "path": "/absolute/path/my-project"
         }
       },
       "label": "Cursor personal",
       "billing": "unknown",
-      "setup_minutes": 10
+      "setup_minutes": 10,
+      "default_model": "auto"
     }
   ]
 }

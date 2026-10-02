@@ -1,29 +1,67 @@
-# LLM Usage Tracker
+# LLM Usage
 
-## Subscription workers and MCP
+Self-hosted subscription usage monitoring and coding-task orchestration for Claude Code, Codex and Cursor. View remaining allowance and reset times, ask an explainable router to choose an account, and submit repository tasks through MCP or HTTP. Workers run the providers' CLIs and return patches for review.
 
-The execution service adds personal Claude, Codex and Cursor account registration, staged quota/reset-aware routing, persistent coding tasks, worker adapters and an authenticated MCP endpoint. See [execution setup and limitations](docs/execution.md). Real provider sign-in is separate from the mock demo below. Provider credentials stay on the worker; no unlocked Mac is required by the worker design.
+This is a **single-owner system**, not a multi-user hosted service. Each operator deploys their own instance and authorizes their own provider accounts. CLI execution and telemetry depend on the provider's current authentication, subscription and endpoint behavior.
 
-Personal subscription capacity tracker with normalized usage snapshots, an explainable router, and a coding-task execution layer. Real subscription connections require owner authorization; the local usage demo below uses simulated data.
+## Start here
 
-## Run locally
+- **Try it without provider accounts:** [local demo](docs/getting-started.md#local-demo).
+- **Run real coding tasks:** [connect a worker](docs/getting-started.md#connect-a-real-worker), then [submit your first task](docs/getting-started.md#submit-your-first-task).
+- **Host it continuously:** [deployment and operations](docs/deployment.md).
+- **Connect a bot or assistant:** [MCP and REST](docs/execution.md#mcp-and-rest).
 
-1. Install Node 22+, pnpm and Postgres. Run `pnpm install`.
-2. Copy `apps/web/.env.example` to `apps/web/.env.local` and set `DATABASE_URL`, `READ_TOKEN`, and `WRITE_TOKEN` to independent long random values. Do not commit these.
-3. Set `DATABASE_URL` in your shell, run `pnpm db:migrate`, and apply `packages/db/seeds/demo.sql` to create the demo accounts (change the labels or IDs for your own setup).
-4. Run `pnpm --filter @llm-usage/web dev` and, in another terminal, `LLM_USAGE_URL=http://localhost:3000 LLM_USAGE_WRITE_TOKEN=<write token> pnpm --filter @llm-usage/collector mock-sync`.
-5. Query `curl -H 'Authorization: Bearer <read token>' http://localhost:3000/v1/status` and `/v1/route?capability=coding`.
+Requirements: Node.js 22, pnpm **11.19.0**, PostgreSQL (validated with 17), Git, and a persistent Mac or Linux machine for real workers. Provider accounts are unnecessary for the mock demo. Docker, Vercel, Tailscale and 1Password are optional.
 
-Mock data is for local development only. Its reset timestamps are derived from run time and labeled `estimated`; real adapters must preserve provider-reported timestamps. The demo account IDs must exist before ingestion.
+## What runs where
 
-The mock collector is a one-shot command. It does not install a scheduler or hold provider login sessions. The separate execution worker manages official CLI calls; automatic Claude/Cursor usage collection remains future work.
+```mermaid
+flowchart LR
+  User[Dashboard / bot / MCP client] --> Web[Next.js service]
+  Web <--> DB[(PostgreSQL)]
+  Worker[Persistent CLI worker] --> Web
+  Worker --> Provider[Claude / Codex / Cursor]
+  Worker --> Repo[Isolated task clones and patches]
+```
 
-Run `pnpm test`, `pnpm typecheck`, and `pnpm build`. See `docs/architecture.md` and `openapi/openapi.yaml` for the contract. Do not deploy mock data as real account usage.
+The web service owns usage history, routing and the job queue. Workers own provider sessions and execution. A worker may run on a cloud VM: `execution: local` means a CLI running on that worker, not necessarily on your laptop. `execution: cloud` means a provider-hosted coding environment.
 
-## Deployment
+| Capability | Current support |
+| --- | --- |
+| Usage dashboard | Password protected, phone-friendly, refreshes once a minute; display timezone is Eastern Time |
+| Quotas and resets | Codex CLI rate limits; Claude and Cursor authenticated telemetry, with freshness and diagnostics |
+| Worker CLI execution | Claude, Codex and Cursor |
+| Provider-hosted execution | Codex adapter; requires your configured provider environment and repository |
+| MCP | Authenticated Streamable HTTP at `/mcp`; configurable bearer headers required, no OAuth discovery |
+| Results | Git patches and job status; no automatic PR creation or deployment |
+| Paid API fallback | Not implemented; unavailable subscription capacity does not authorize paid usage |
 
-Connect `apps/web` as the Vercel project root, attach a Neon Postgres database, set `DATABASE_URL`, `READ_TOKEN`, and `WRITE_TOKEN`, run the migrations against that database, then deploy. Deployment is intentionally fail-closed without these values. Keep the write token only on the collector machine; read token is for trusted clients. No provider browser credentials belong in Vercel.
+Claude/Cursor telemetry endpoints are not guaranteed public APIs. Unknown capacity stays unknown; provider behavior and a real-machine acceptance test determine readiness. See [provider support](docs/providers.md) and [execution limitations](docs/execution.md#runtime-and-results).
 
-## Mac mini handoff
+## Repository layout
 
-Clone the private repository with `git clone git@github.com:dnikolsk/llm-usage.git ~/Projects/llm-usage` (or use HTTPS and your preferred Projects directory). From that directory run `pnpm install` and follow the deployment section. Configure the Vercel project root as `apps/web`; execute the database migration before exercising ingestion. Run `pnpm test && pnpm typecheck && pnpm build` first. Keep all real credentials out of Git. The execution worker runs as a separate persistent process; Vercel request handlers do not host CLI jobs.
+| Path | Purpose |
+| --- | --- |
+| `apps/web` | Dashboard, usage API, execution API and MCP server |
+| `collector` | Provider connection/usage adapters, worker and enrollment CLI |
+| `packages/core` | Validated contracts and routing logic |
+| `packages/db` | PostgreSQL schema and ordered migrations |
+| `config` | Nonsecret configuration examples; replace all placeholder paths |
+| `scripts` | Operator verification helpers |
+
+The optional companion [ai-builder-tools setup pack](https://github.com/dnikolsk/ai-builder-tools/tree/feat/cloud-subscription-workers/machine) installs tools and configures host supervision/1Password. It delegates worker configuration to this repository. That setup currently lives on `feat/cloud-subscription-workers`; if you cannot access it, the manual worker instructions here work independently. Neither repository copies provider sessions between machines.
+
+## Development and contribution
+
+```sh
+pnpm install --frozen-lockfile
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+node --test scripts/verify-execution.test.mjs
+```
+
+The database integration suite is opt-in; [setup and validation](docs/getting-started.md#development-checks) explains how to run it. Fixture tests do not establish live provider authentication. Read [AGENTS.md](AGENTS.md) and [security](docs/security.md) before contributing. Use a feature branch and a PR describing behavior and validation; never commit credentials, provider profiles or real task artifacts.
+
+Further reference: [architecture](docs/architecture.md), [execution and routing](docs/execution.md), [usage-only routing](docs/routing.md), and [usage API OpenAPI](openapi/openapi.yaml). The OpenAPI file covers `/v1/status`, `/v1/route` and `/v1/ingest`; execution/MCP are documented separately.

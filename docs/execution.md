@@ -2,17 +2,19 @@
 
 The usage API remains compatible. Execution is an additional authenticated service: a durable PostgreSQL queue, staged planner, per-account workers, and a Streamable HTTP MCP endpoint at `/mcp`. The service never stores provider credentials. Provider login code belongs under `collector/src/providers/<provider>`.
 
+For a first installation, start with [Getting started](getting-started.md). This page is the detailed runtime and API reference; [deployment](deployment.md) covers credential placement and ongoing operations.
+
 ## Prepared personal accounts
 
 `config/worker.personal.example.json` registers Codex personal (`codex-personal`), Claude personal (`claude-personal-main`), and Cursor personal (`cursor-personal`). The `-main` suffix separates the real Claude account from the original mock seed. Mock accounts have no execution targets and cannot run tasks. Registration does not claim successful sign-in or available subscription billing.
 
-Install the pinned Linux clients with `ai-builder-tools/cloud/install-clis.sh`. Configure repository paths and persistent account/artifact directories in a private worker JSON file. Never put tokens or OAuth material in it. The provided configuration uses the current cloud checkouts and clones each local task into its own directory; it does not create Git worktrees or modify the source checkout. Only committed source is cloned. Provider-cloud execution operates on the provider's configured repository/branch, not local uncommitted files.
+Install the official clients manually or use the optional [machine setup pack](https://github.com/dnikolsk/ai-builder-tools/tree/feat/cloud-subscription-workers/machine). Configure repository paths and persistent account/artifact directories in a private worker JSON file. Never put tokens or OAuth material in it. The example contains placeholder paths and a `my-project` repository key; replace every path before use. The worker clones each local task into its own directory; it does not create Git worktrees or modify the source checkout. Only committed source is cloned. Provider-cloud execution operates on the provider's configured repository/branch, not local uncommitted files.
 
 Migrate with `DATABASE_URL=... pnpm db:migrate`. Start the web service. Provide independent, at least 32-character secrets through secure environment settings:
 
 - `JOB_TOKEN`: bot/MCP submission, planning, status and cancellation.
 - `ADMIN_TOKEN`: account/target registration and manual resolution of uncertain work.
-- `WORKER_CLOUD_DEV_TOKEN`: worker named `cloud-dev`. Other worker IDs use `WORKER_<ID_UPPERCASE_WITH_UNDERSCORES>_TOKEN`.
+- `WORKER_WORKER_1_TOKEN`: example worker named `worker-1`. Other worker IDs use `WORKER_<ID_UPPERCASE_WITH_UNDERSCORES>_TOKEN`.
 
 The existing `READ_TOKEN`/`WRITE_TOKEN` only operate the usage API. They cannot submit code execution. This release is single-owner; a shared JOB_TOKEN is not multi-tenant authorization. Expose over authenticated HTTPS; browser MCP Origins are rejected unless explicitly listed in `MCP_ALLOWED_ORIGINS`.
 
@@ -112,7 +114,7 @@ Expired leases and ambiguous CLI outcomes become `needs_review`, retaining the a
 
 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`. With a test-capable PostgreSQL role and DATABASE_URL, run `RUN_DB_INTEGRATION=1 pnpm --filter @llm-usage/web exec vitest run tests/execution-db.test.ts`; it creates and drops its own isolated schema. Tests cover routing/reset semantics, MCP SDK calls and HTTP initialization, scoped credentials, atomic/idempotent queue behavior, leases/recovery, provider response parsing, and the phone code handoff. Fake CLI fixtures do not establish that real subscriptions are authenticated.
 
-The final live acceptance test still requires owner sign-in: with the Mac powered off, connect from a phone, submit a coding task, receive changes, restart the worker, and repeat. Tailscale/1Password deployment guidance is in `ai-builder-tools/cloud/README.md`.
+The final live acceptance test still requires owner sign-in: with the Mac powered off, connect from a phone, submit a coding task, receive changes, restart the worker, and repeat. See [deployment](deployment.md) for supervision, Tailscale and 1Password options.
 
 ### Deployed subscription verification
 
@@ -123,7 +125,7 @@ node scripts/verify-execution.mjs /absolute/path/worker.json /private/path/verif
 node scripts/verify-execution.mjs /absolute/path/worker.json /private/path/verification --run
 ```
 
-The first command only reads accounts and plans automatic routing plus explicit Claude, Codex and Cursor routing for `ai-builder-tools`. `plans.json` records exclusions, quota evidence, all applicable reset buckets and each decision step. An unavailable provider is reported without fabricating readiness. The second command submits one small task using automatic routing and real subscription allowance: create a uniquely named text file in the task's repository checkout. Review `changes.patch` for the expected new file and no unintended changes. `job.json` records the actual execution decision (which may differ from preflight), status and result. Success requires both a successful job state and the expected text in a returned patch; it is not a full audit of all changes or proof that every provider can execute.
+**This helper currently hardcodes the repository key `ai-builder-tools`.** Use it only if that repository is registered on your targets. For any other repository, use the generic [first-task REST walkthrough](getting-started.md#submit-your-first-task). The first command only reads accounts and plans automatic routing plus explicit Claude, Codex and Cursor routing for `ai-builder-tools`. `plans.json` records exclusions, quota evidence, all applicable reset buckets and each decision step. An unavailable provider is reported without fabricating readiness. The second command submits one small task using automatic routing and real subscription allowance: create a uniquely named text file in the task's repository checkout. Review `changes.patch` for the expected new file and no unintended changes. `job.json` records the actual execution decision (which may differ from preflight), status and result. Success requires both a successful job state and the expected text in a returned patch; it is not a full audit of all changes or proof that every provider can execute.
 
 Use the same output directory to resume after a connection loss or verification-process restart. The request and idempotency key are saved before submission; rerunning retrieves the same task. A ten-minute monitoring timeout leaves the job intact. A `needs_review` outcome requires inspecting the existing job and artifact, not creating a fresh attempt. Output contains task metadata and code; keep the directory private and outside source control. The helper never saves the service token or prints provider credentials. It does not enable billing, reconnect accounts, restart services, or automatically cancel work.
 
@@ -147,7 +149,7 @@ Deploy while idle: stop the worker, pull, rebuild, restart the web service, and 
 
 ### Compact dashboard
 
-The `/` page now uses the existing `DASHBOARD_PASSWORD` cookie sign-in from the dashboard branch. Preserve that deployment secret (at least 32 characters) when deploying; there is no public usage view or client-side service token. The screen shows remaining capacity, reset countdowns, worker connectivity and a repository-specific execution plan. Additional buckets, source confidence and diagnostics expand per account. Passed resets, failed collection and stale readings display unknown rather than suggesting restored capacity. Times are Eastern Time. Visible tabs refresh once a minute; this refreshes the view, not the provider collectors.
+The `/` page uses `DASHBOARD_PASSWORD` cookie sign-in. Set an independent random password of at least 32 characters on first deployment and preserve it during upgrades; there is no public usage view or client-side service token. The screen shows remaining capacity, reset countdowns, worker connectivity and a repository-specific execution plan. Additional buckets, source confidence and diagnostics expand per account. Passed resets, failed collection and stale readings display unknown rather than suggesting restored capacity. Times are Eastern Time. Visible tabs refresh once a minute; this refreshes the view, not the provider collectors.
 
 ### Machine setup and worker enrollment ownership
 
