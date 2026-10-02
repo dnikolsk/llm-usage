@@ -1,5 +1,7 @@
 # Deployment and operations
 
+For a first independent deployment, follow [Deploy your own](deploy-your-own.md), including private role-file generation and agent instructions.
+
 Deploy a Next.js control service, PostgreSQL, and at least one persistent CLI worker. The service can run on Vercel or a Node host. Workers need their own long-lived Mac/Linux process and persistent storage; Vercel request handlers do not host CLI tasks.
 
 This release is single-owner. Shared tokens grant the associated role across the deployment; they are not per-user permissions. Give other operators their own instance rather than exposing yours as a public multi-tenant service.

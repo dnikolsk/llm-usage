@@ -59,10 +59,16 @@ export async function verify({ service, token, output, run = false, repository =
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const [configPath, output, flag] = process.argv.slice(2);
+  const [configPath, output, ...options] = process.argv.slice(2);
   try {
-    if (!configPath || !output || (flag && flag !== '--run') || process.argv.length > 5) throw new Error('Usage: node scripts/verify-execution.mjs WORKER_CONFIG OUTPUT_DIRECTORY [--run]');
+    let run=false,repository='ai-builder-tools',repositorySet=false;
+    for(let i=0;i<options.length;i++){
+      if(options[i]==='--run'&&!run)run=true;
+      else if(options[i]==='--repository'&&options[i+1]&&!repositorySet){repositorySet=true;repository=options[++i];if(!/^[a-z][a-z0-9_-]{1,79}$/.test(repository))throw new Error('Invalid repository key');}
+      else throw new Error('Unknown or duplicate verification option');
+    }
+    if (!configPath || !output) throw new Error('Usage: node scripts/verify-execution.mjs WORKER_CONFIG OUTPUT_DIRECTORY [--repository KEY] [--run]');
     const config = JSON.parse(await readFile(configPath, 'utf8'));
-    await verify({ service: config.service_url, token: process.env.JOB_TOKEN, output, run: flag === '--run' });
+    await verify({ service: config.service_url, token: process.env.JOB_TOKEN, output, run, repository });
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
