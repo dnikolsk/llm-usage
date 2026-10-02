@@ -1,1 +1,18 @@
-{"name":"llm-usage","private":true,"packageManager":"pnpm@11.19.0","scripts":{"lint":"pnpm -r lint","typecheck":"pnpm -r typecheck","test":"pnpm -r test","build":"pnpm --filter @llm-usage/web build","db:migrate":"pnpm --filter @llm-usage/db migrate"},"devDependencies":{"typescript":"^5.9.3","vitest":"^3.2.4"}}
+{
+  "name": "llm-usage",
+  "private": true,
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test && node --test scripts/setup.test.mjs scripts/verify-execution.test.mjs",
+    "build": "pnpm --filter @llm-usage/web build",
+    "db:migrate": "pnpm --filter @llm-usage/db migrate",
+    "setup:init": "node scripts/setup.mjs init",
+    "setup:run": "node scripts/setup.mjs run"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

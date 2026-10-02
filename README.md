@@ -6,6 +6,8 @@ This is a **single-owner system**, not a multi-user hosted service. Each operato
 
 ## Start here
 
+**[Deploy your own dashboard on Vercel](docs/deploy-your-own.md)** — fork, generate private configuration, deploy, and connect your own subscription accounts. Give your setup agent [AGENTS.md](AGENTS.md).
+
 - **Try it without provider accounts:** [local demo](docs/getting-started.md#local-demo).
 - **Run real coding tasks:** [connect a worker](docs/getting-started.md#connect-a-real-worker), then [submit your first task](docs/getting-started.md#submit-your-first-task).
 - **Host it continuously:** [deployment and operations](docs/deployment.md).
