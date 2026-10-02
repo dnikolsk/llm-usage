@@ -148,3 +148,22 @@ Deploy while idle: stop the worker, pull, rebuild, restart the web service, and 
 ### Compact dashboard
 
 The `/` page now uses the existing `DASHBOARD_PASSWORD` cookie sign-in from the dashboard branch. Preserve that deployment secret (at least 32 characters) when deploying; there is no public usage view or client-side service token. The screen shows remaining capacity, reset countdowns, worker connectivity and a repository-specific execution plan. Additional buckets, source confidence and diagnostics expand per account. Passed resets, failed collection and stale readings display unknown rather than suggesting restored capacity. Times are Eastern Time. Visible tabs refresh once a minute; this refreshes the view, not the provider collectors.
+
+### Machine setup and worker enrollment ownership
+
+`ai-builder-tools` installs the tools and manages host supervision, 1Password integration and the machine authentication checklist. This repository owns worker configuration, account/target defaults, registration, provider adapters and execution. Existing workers do not need a configuration migration for this separation.
+
+The setup pack's `setup.sh init-worker --checkout /path/to/llm-usage …` delegates to this checkout's `collector/bin/init-worker.mjs`. The same command is available directly, without installing collector dependencies first:
+
+```sh
+node collector/bin/init-worker.mjs \
+  --state /absolute/path/ai-builder \
+  --tools /absolute/path/ai-builder/tools.json \
+  --service https://YOUR_PRIVATE_SERVICE \
+  --worker-id my-machine \
+  --repository my-project=/absolute/path/my-project
+```
+
+With dependencies installed, `pnpm --filter @llm-usage/collector worker:init` accepts the same arguments. Repeat `--repository` as needed; `--output` overrides the default `STATE/worker.json`. Generation is local and refuses to overwrite an existing config. It does not sign in, register, start a worker or modify the service. Registration remains `pnpm --filter @llm-usage/collector register CONFIG` with temporary admin authentication.
+
+The installer provides a version-1 JSON manifest with `providers` entries named `codex`, `claude`, and `cursor-agent`, each containing absolute `binary` and `auth_dir` paths. No credentials belong in this manifest. Tool versions and installation layout remain installer decisions; enrollment does not duplicate those pins. If upgrading an older setup pack, regenerate its launchers/manifest before enrolling a new worker. Update both repositories to versions supporting this interface.
