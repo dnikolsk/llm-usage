@@ -65,6 +65,8 @@ A worker directory and filtered environment are not a security sandbox. Isolate 
 
 ## Troubleshooting
 
+For missing reset dates or paid balances, run the [read-only live usage diagnostic](usage-diagnostics.md) on the worker host and inspect its shareable JSON report before changing services.
+
 | Symptom | Check |
 | --- | --- |
 | Dashboard cannot sign in | `DASHBOARD_PASSWORD` is configured, at least 32 characters, and deployed |
