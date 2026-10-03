@@ -32,10 +32,11 @@ async function health(target:Target){
   try{ready=supported&&await adapter(target).authenticated(command(target));}catch{}
   if(ready&&Date.now()-(usageChecked.get(target.account_id)??0)>60_000){
     const usage=await collectUsage(target);
-    await api('usage',usage.snapshot);
-    await mirrorUsage(usage.snapshot);
     usageChecked.set(target.account_id,Date.now()+(usage.snapshot.metadata.diagnostic_code==='usage_rate_limited'?240_000:0));
     if(usage.allowed===false)usageDenied.add(target.account_id);else if(usage.allowed===true)usageDenied.delete(target.account_id);
+    // Publish to the dashboard before the control service: an unreachable control host must not hide usage.
+    await mirrorUsage(usage.snapshot);
+    await api('usage',usage.snapshot);
   }
   await api('health',{target_id:target.id,health:!ready?(supported?'needs_login':'unavailable'):usageDenied.has(target.account_id)?'unavailable':'ready'});
   return ready;
