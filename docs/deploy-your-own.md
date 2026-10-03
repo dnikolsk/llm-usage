@@ -31,7 +31,7 @@ The command creates a new private directory, mode 700, with mode-600 files. It r
 
 | File | Process allowed to receive its values |
 | --- | --- |
-| `web-secrets.json` | Vercel/Next.js service: database, `SESSION_KEY` (encrypts stored provider logins) and all server-side role bindings |
+| `web-secrets.json` | Vercel/Next.js service: database, `LLM_SESSION_KEY` (encrypts stored provider logins) and all server-side role bindings |
 | `worker-secrets.json` | This worker only: its machine-specific token |
 | `client-secrets.json` | Bot/MCP client: job and usage-read tokens |
 | `operator-secrets.json` | Temporary migration/registration session: database and admin token |
@@ -40,7 +40,7 @@ The command creates a new private directory, mode 700, with mode-600 files. It r
 
 ## 3. Deploy your page
 
-Through your authorized Vercel tool or project environment settings, bind the keys in `web-secrets.json`'s `variables` object to server-side variables. Keep values out of tool output/chat and do not use `NEXT_PUBLIC_*` names. `DATABASE_URL`, `SESSION_KEY`, `DASHBOARD_PASSWORD`, independent role tokens and `WORKER_WORKER_1_TOKEN` must have your own values. Back up `SESSION_KEY` with the rest of the bundle: if it is lost or rotated, every provider must be connected again.
+Through your authorized Vercel tool or project environment settings, bind the keys in `web-secrets.json`'s `variables` object to server-side variables. Keep values out of tool output/chat and do not use `NEXT_PUBLIC_*` names. `DATABASE_URL`, `LLM_SESSION_KEY`, `DASHBOARD_PASSWORD`, independent role tokens and `WORKER_WORKER_1_TOKEN` must have your own values. Back up `LLM_SESSION_KEY` with the rest of the bundle: if it is lost or rotated, every provider must be connected again.
 
 Run migrations with only the operator role:
 
@@ -63,7 +63,7 @@ pnpm setup:run --file "$HOME/.llm-usage-owner/operator-secrets.json" -- \
   pnpm --filter @llm-usage/collector register /absolute/path/worker-state/worker.json
 ```
 
-Sign in to your dashboard and open `/connect`. Connect each account: the page starts the provider's own sign-in in your browser; you approve it and paste back what the provider shows (Claude shows a code; Codex lands on a `localhost` address you copy from the address bar; Cursor needs nothing, just continue). The login is stored in your service, sealed with `SESSION_KEY`, and each card turns **Live**. This is subscription authentication: it does not require Anthropic/OpenAI/Cursor API keys, and the worker never logs in itself. Verify included billing/overage settings before marking targets `subscription`, then re-register.
+Sign in to your dashboard and open `/connect`. Connect each account: the page starts the provider's own sign-in in your browser; you approve it and paste back what the provider shows (Claude shows a code; Codex lands on a `localhost` address you copy from the address bar; Cursor needs nothing, just continue). The login is stored in your service, sealed with `LLM_SESSION_KEY`, and each card turns **Live**. This is subscription authentication: it does not require Anthropic/OpenAI/Cursor API keys, and the worker never logs in itself. Verify included billing/overage settings before marking targets `subscription`, then re-register.
 
 Start the worker with only its own token:
 

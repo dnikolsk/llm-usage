@@ -1,12 +1,12 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
-/** SESSION_KEY: 64 hex characters (32 bytes). Only the web service holds it; sealed values are useless without it. */
+/** LLM_SESSION_KEY: 64 hex characters (32 bytes). Only the web service holds it; sealed values are useless without it. */
 function key(): Buffer {
-  const value = process.env.SESSION_KEY ?? '';
+  const value = process.env.LLM_SESSION_KEY ?? '';
   if (!/^[0-9a-fA-F]{64}$/.test(value)) throw new Error('session_key_required');
   return Buffer.from(value, 'hex');
 }
-export const sessionKeyConfigured = () => /^[0-9a-fA-F]{64}$/.test(process.env.SESSION_KEY ?? '');
+export const sessionKeyConfigured = () => /^[0-9a-fA-F]{64}$/.test(process.env.LLM_SESSION_KEY ?? '');
 
 export function seal(value: unknown, purpose: string): string {
   const iv = randomBytes(12);

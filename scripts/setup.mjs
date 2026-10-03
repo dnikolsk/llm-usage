@@ -28,15 +28,15 @@ export async function initialize(args,env=process.env){
  }
  if(new Set(Object.values(secrets)).size!==names.length)throw new Error('Existing role secrets must be independent.');
  // Encrypts stored provider logins; web role only. Rotating it makes every connected provider need a new sign-in.
- if(env.SESSION_KEY!==undefined&&!/^[0-9a-fA-F]{64}$/.test(env.SESSION_KEY))throw new Error('Existing SESSION_KEY is invalid; use 64 hex characters.');
- const sessionKey=env.SESSION_KEY??randomBytes(32).toString('hex');
+ if(env.LLM_SESSION_KEY!==undefined&&!/^[0-9a-fA-F]{64}$/.test(env.LLM_SESSION_KEY))throw new Error('Existing LLM_SESSION_KEY is invalid; use 64 hex characters.');
+ const sessionKey=env.LLM_SESSION_KEY??randomBytes(32).toString('hex');
  const database=env.DATABASE_URL;
  if(database){
   let url;try{url=new URL(database);}catch{throw new Error('DATABASE_URL must be a PostgreSQL connection URI.');}
   if(!['postgres:','postgresql:'].includes(url.protocol))throw new Error('DATABASE_URL must be a PostgreSQL connection URI.');
  }
  const roles={
-  web:{...secrets,SESSION_KEY:sessionKey,...(database?{DATABASE_URL:database}:{})},
+  web:{...secrets,LLM_SESSION_KEY:sessionKey,...(database?{DATABASE_URL:database}:{})},
   worker:{[workerKey]:secrets[workerKey]},
   client:{JOB_TOKEN:secrets.JOB_TOKEN,READ_TOKEN:secrets.READ_TOKEN},
   operator:{ADMIN_TOKEN:secrets.ADMIN_TOKEN,...(database?{DATABASE_URL:database}:{})},
@@ -53,7 +53,7 @@ export async function run(args,env=process.env){
  if(args[0]!=='--file'||!args[1]||args[2]!=='--'||!args[3])throw new Error('Expected run --file PRIVATE_ROLE_JSON -- COMMAND [ARGS]');
  const data=JSON.parse(await readFile(resolve(args[1]),'utf8'));
  if(!['web','worker','client','operator'].includes(data.role)||!data.variables||Array.isArray(data.variables)||typeof data.variables!=='object')throw new Error('Invalid role file');
- const allowed={web:/^(DATABASE_URL|SESSION_KEY|READ_TOKEN|WRITE_TOKEN|JOB_TOKEN|ADMIN_TOKEN|DASHBOARD_PASSWORD|WORKER_[A-Z0-9_]+_TOKEN|MCP_ALLOWED_ORIGINS)$/,worker:/^WORKER_[A-Z0-9_]+_TOKEN$/,client:/^(JOB_TOKEN|READ_TOKEN)$/,operator:/^(ADMIN_TOKEN|DATABASE_URL)$/}[data.role];
+ const allowed={web:/^(DATABASE_URL|LLM_SESSION_KEY|READ_TOKEN|WRITE_TOKEN|JOB_TOKEN|ADMIN_TOKEN|DASHBOARD_PASSWORD|WORKER_[A-Z0-9_]+_TOKEN|MCP_ALLOWED_ORIGINS)$/,worker:/^WORKER_[A-Z0-9_]+_TOKEN$/,client:/^(JOB_TOKEN|READ_TOKEN)$/,operator:/^(ADMIN_TOKEN|DATABASE_URL)$/}[data.role];
  for(const [name,value] of Object.entries(data.variables))if(!allowed.test(name)||typeof value!=='string'||!value)throw new Error('Invalid variable for this role');
  const childEnv={...Object.fromEntries(Object.entries(env).filter(([name])=>baseNames.test(name))),...data.variables};
  return new Promise(resolve=>{

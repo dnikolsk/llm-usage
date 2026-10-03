@@ -25,7 +25,7 @@ export default async function Connect({searchParams}:{searchParams:Promise<{acco
  const begun=observer?observer.begin():null;
  return <main className="shell"><header className="topbar"><a className="wordmark" href="/">◈ USAGE</a><div><a className="quiet" href="/">← Dashboard</a></div></header>
  <section className="heading"><div><h1>Connect providers</h1><p>One sign-in per provider account. The service keeps the login, reads usage live, and hands workers short-lived access only.</p></div></section>
- {!sessionKeyConfigured()&&<p className="notice">SESSION_KEY is not configured on the service, so logins cannot be stored. Add a 64-hex-character key to the deployment and redeploy.</p>}
+ {!sessionKeyConfigured()&&<p className="notice">LLM_SESSION_KEY is not configured on the service, so logins cannot be stored. Add a 64-hex-character key to the deployment and redeploy.</p>}
  {query.error&&<p className="notice" role="alert">{enrollmentMessage(query.error)}</p>}
  {query.connected&&<p className="notice good" role="status">{query.connected} is connected. Usage now reads live from the provider.</p>}
  <section className="accounts" aria-label="Provider accounts">{accounts.map(account=>{

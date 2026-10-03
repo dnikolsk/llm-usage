@@ -17,7 +17,7 @@ This path uses simulated Claude usage and does not sign into a provider or execu
    cp apps/web/.env.example apps/web/.env.local
    ```
 
-2. Edit `.env.local`. Set `DATABASE_URL` to your actual connection URI, such as `postgresql://YOUR_DB_USER:YOUR_DB_PASSWORD@127.0.0.1:5432/llm_usage_demo`. Configure independent random `READ_TOKEN`, `WRITE_TOKEN` and `DASHBOARD_PASSWORD` values, each at least 32 characters, and a 64-hex `SESSION_KEY` (`openssl rand -hex 32`) so provider logins can be stored. Your password manager can generate and store them. Execution secrets can stay unconfigured until the worker steps below; the example values are placeholders, never deployment credentials.
+2. Edit `.env.local`. Set `DATABASE_URL` to your actual connection URI, such as `postgresql://YOUR_DB_USER:YOUR_DB_PASSWORD@127.0.0.1:5432/llm_usage_demo`. Configure independent random `READ_TOKEN`, `WRITE_TOKEN` and `DASHBOARD_PASSWORD` values, each at least 32 characters, and a 64-hex `LLM_SESSION_KEY` (`openssl rand -hex 32`) so provider logins can be stored. Your password manager can generate and store them. Execution secrets can stay unconfigured until the worker steps below; the example values are placeholders, never deployment credentials.
 
 3. Load the trusted local file into this shell and migrate/seed:
 

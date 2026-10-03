@@ -1,6 +1,6 @@
 # Architecture
 
-Owner enrolls each provider once at `/connect` → the service stores the grant sealed with `SESSION_KEY` → every read (dashboard, `/v1/status`, MCP `list_accounts`/`plan_task`) calls the providers live, appends the observation to Postgres, and projects status → deterministic `/v1/route` and execution planning → clients. Workers fetch short-lived access tokens from the service, run the official CLIs, and return patches.
+Owner enrolls each provider once at `/connect` → the service stores the grant sealed with `LLM_SESSION_KEY` → every read (dashboard, `/v1/status`, MCP `list_accounts`/`plan_task`) calls the providers live, appends the observation to Postgres, and projects status → deterministic `/v1/route` and execution planning → clients. Workers fetch short-lived access tokens from the service, run the official CLIs, and return patches.
 
 The execution layer adds MCP/HTTP task submission, a durable queue, staged provider/account/target selection, and cloud-hosted official CLI workers. See [execution.md](execution.md). The original `/v1/route` remains a quota-only recommendation contract; `/v1/execution/plan` considers live worker health, billing, setup and existing sessions as well as quota.
 

@@ -3,16 +3,16 @@ import {seal,open,sessionKeyConfigured} from '../src/crypto';
 import {beginEnrollment,readEnrollment,enrollmentMessage} from '../src/enroll';
 
 describe('sealed provider sessions',()=>{
- beforeEach(()=>{process.env.SESSION_KEY='a'.repeat(64);});
- afterEach(()=>{delete process.env.SESSION_KEY;vi.restoreAllMocks();});
+ beforeEach(()=>{process.env.LLM_SESSION_KEY='a'.repeat(64);});
+ afterEach(()=>{delete process.env.LLM_SESSION_KEY;vi.restoreAllMocks();});
  it('round-trips only with the same key and purpose',()=>{
   const sealed=seal({access_token:'secret'},'provider-session:claude-personal');
   expect(sealed).not.toContain('secret');
   expect(open(sealed,'provider-session:claude-personal')).toEqual({access_token:'secret'});
   expect(()=>open(sealed,'provider-session:other')).toThrow('sealed_value_invalid');
-  process.env.SESSION_KEY='b'.repeat(64);
+  process.env.LLM_SESSION_KEY='b'.repeat(64);
   expect(()=>open(sealed,'provider-session:claude-personal')).toThrow('sealed_value_invalid');
-  process.env.SESSION_KEY='short';expect(sessionKeyConfigured()).toBe(false);expect(()=>seal({},'x')).toThrow('session_key_required');
+  process.env.LLM_SESSION_KEY='short';expect(sessionKeyConfigured()).toBe(false);expect(()=>seal({},'x')).toThrow('session_key_required');
  });
  it('keeps PKCE state in a sealed, expiring cookie and never in the database',()=>{
   const begun=beginEnrollment('claude-personal','anthropic',1_000_000);

@@ -15,13 +15,13 @@ All bearer tokens and the dashboard password must be independent random values o
 | `DATABASE_URL` | Web service; temporary migration environment | PostgreSQL connection |
 | `DASHBOARD_PASSWORD` | Web service; owner's password manager | Dashboard login and cookie signing |
 | `READ_TOKEN` | Web service; trusted usage clients | `/v1/status` and `/v1/route` |
-| `SESSION_KEY` | Web service only | 64 hex characters; encrypts stored provider logins. Losing it means connecting every provider again |
+| `LLM_SESSION_KEY` | Web service only | 64 hex characters; encrypts stored provider logins. Losing it means connecting every provider again |
 | `WRITE_TOKEN` | Web service; local demo only | `/v1/ingest` accepts only simulated `demo` observations; real telemetry is refused with `410` |
 | `JOB_TOKEN` | Web service; bot/MCP clients | Plan, submit, inspect and cancel jobs |
 | `ADMIN_TOKEN` | Web service; temporary operator environment | Register accounts/targets and resolve uncertain jobs |
 | `WORKER_<ID>_TOKEN` | Web service and exactly the corresponding worker | Worker health, access-token issuance, leases and results |
 | `MCP_ALLOWED_ORIGINS` | Web service, when required | Comma-separated exact allowed browser origins |
-| Provider logins | Web service database, sealed with `SESSION_KEY`; connected once at `/connect` | Live usage reads and access tokens for workers |
+| Provider logins | Web service database, sealed with `LLM_SESSION_KEY`; connected once at `/connect` | Live usage reads and access tokens for workers |
 | Issued access tokens | Each worker's account `auth_dir`, written by the worker, no refresh material | Official CLI authentication |
 
 For ID `worker-1`, the server expects `WORKER_WORKER_1_TOKEN`. Hyphens become underscores and the ID is uppercased. Set `token_env` in the worker JSON to the matching name. Avoid IDs that normalize to the same variable (for example `worker-a` and `worker_a`). Missing role secrets disable that role; the dashboard password is not an API token.
@@ -58,8 +58,8 @@ Run the last command under your host's supervisor and inject web-service secrets
 - On a Mac, launchd user jobs require the OS user to sign in and the machine to stay awake. Use a persistent Linux host for availability independent of your laptop.
 - Workers never log in. Provider sessions are connected once at `/connect` and refreshed by the service; when a provider rejects a refresh the dashboard shows **Sign in again** and the worker reports `needs_login` until you do.
 - 1Password is optional. The setup pack can resolve a worker token through desktop approval or an unattended service account when your plan supports it. A cloud service account needs a host-injected bootstrap credential. Provider sessions live in the service, never in the vault.
-- Upgrading from a release that pushed usage (worker `usage:sync`, `usage_mirror`, scheduled publishers): follow the [upgrade runbook](../AGENTS.md#upgrade-an-existing-instance-to-live-provider-sessions): add `SESSION_KEY`, deploy, connect providers at `/connect`, update the worker, then retire the publishers.
-- For upgrades, let the worker become idle and stop it, back up the database, update the checkout, install frozen dependencies, run migrations, build/deploy the web service, and re-register if target configuration changed. Restart the single worker, check the dashboard reads live, and run a small acceptance task. Preserve existing secrets, above all `SESSION_KEY`.
+- Upgrading from a release that pushed usage (worker `usage:sync`, `usage_mirror`, scheduled publishers): follow the [upgrade runbook](../AGENTS.md#upgrade-an-existing-instance-to-live-provider-sessions): add `LLM_SESSION_KEY`, deploy, connect providers at `/connect`, update the worker, then retire the publishers.
+- For upgrades, let the worker become idle and stop it, back up the database, update the checkout, install frozen dependencies, run migrations, build/deploy the web service, and re-register if target configuration changed. Restart the single worker, check the dashboard reads live, and run a small acceptance task. Preserve existing secrets, above all `LLM_SESSION_KEY`.
 - Back up PostgreSQL and protect worker artifacts as private source code. Small patches are returned by the API; larger patches stay on the worker and need a separate authenticated retrieval path.
 - Rotate compromised credentials at both ends. Update a worker token on the service and in the worker's secret source, then restart/redeploy as appropriate. Dashboard password rotation invalidates existing dashboard sessions.
 
@@ -77,7 +77,7 @@ For missing reset dates or paid balances, open `/connect`: an account that is no
 | No eligible route | Plan exclusions: billing confirmation, repository key, worker health, model binding, quota freshness/exhaustion |
 | Quotas unknown or stale | Connect or re-sign-in the provider at `/connect`; read the `observations` diagnostic in `/v1/status` rather than assuming full allowance |
 | A second deployment shows different usage | Each deployment reads from its own connected sessions; connect providers there too, or share one database ([details](execution.md#several-dashboards-or-a-private-control-host)) |
-| `/connect` says `SESSION_KEY` is not configured | Add a 64-hex key to the web service and redeploy; existing sessions are unreadable if the key changes |
+| `/connect` says `LLM_SESSION_KEY` is not configured | Add a 64-hex key to the web service and redeploy; existing sessions are unreadable if the key changes |
 | Cursor reports logged in but is unavailable | Backend model access may reject stored tokens; use the documented [reconnect flow](execution.md#cursor-says-logged-in-but-rejects-tokens) |
 | Jobs stay queued | Matching worker ID/token, allowed repository, supervised process, subscription eligibility |
 | `needs_review` | Inspect the existing job and remote process; an admin must resolve uncertainty before retrying |
