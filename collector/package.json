@@ -13,6 +13,7 @@
     "connect:web": "tsx src/providers/claude/connect-web.ts",
     "register": "tsx src/register.ts",
     "usage:sync": "tsx src/usage-sync.ts",
+    "usage:doctor": "tsx src/usage-doctor-cli.ts",
     "worker:init": "node bin/init-worker.mjs"
   },
   "dependencies": {
