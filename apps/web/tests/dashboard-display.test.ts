@@ -14,3 +14,12 @@ it('does not present expired, stale or failed usage as current capacity',()=>{
 it('keeps both Cursor pools visible alongside the combined allowance',()=>{
  expect(primaryBuckets(account).map(b=>b.scope)).toEqual(['all_models','cursor_auto','cursor_api']);
 });
+
+it('formats visible reset dates and distinguishes paid dollars from provider credits',async()=>{
+ const {time,paidAmount,paidCurrent}=await import('../src/dashboard-display');
+ expect(time('2026-10-04T05:00:00Z')).toContain('Oct 4');expect(time(null)).toBe('Not reported');
+ expect(paidAmount(7500,'usd_cents')).toBe('$75.00');expect(paidAmount(125.5,'credits')).toBe('125.5 credits');expect(paidAmount(null,'credits')).toBe('Not reported');
+ const p={observed_at:now.toISOString(),reset_at:null} as import('@llm-usage/core').PaidUsage;
+ expect(paidCurrent(account,p,now)).toBe(true);expect(paidCurrent({...account,status:'error'},p,now)).toBe(false);
+ expect(paidCurrent(account,{...p,observed_at:'2026-10-01T17:00:00Z'},now)).toBe(false);expect(paidCurrent(account,{...p,reset_at:now.toISOString()},now)).toBe(false);
+});

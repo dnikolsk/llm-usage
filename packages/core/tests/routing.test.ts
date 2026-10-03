@@ -48,3 +48,9 @@ describe('routing',()=>{
     expect(ingestSnapshot.safeParse({...snapshot,limits:[{...bucket,metadata:{html:'<cookie>'}}]}).success).toBe(false);
   });
 });
+
+it('paid balances do not alter subscription routing or override exhaustion',()=>{
+ const empty=account('empty',0,0);const paid={id:'credits',label:'Paid credits',kind:'balance' as const,unit:'credits' as const,remaining:100000,used:null,limit:null,enabled:true,unlimited:false,observed_at:empty.observed_at!,reset_at:null};
+ expect(route([{...empty,paid_usage:[paid]}],{now}).recommended).toBeNull();
+ expect(route([{...account('available',.5,.5),paid_usage:[paid]}],{now}).recommended?.account_id).toBe('available');
+});

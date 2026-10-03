@@ -2,3 +2,4 @@
 
 .buckets>.empty{grid-column:1/-1;margin:0;padding:12px 0;font-size:12px}.next details form{margin-top:12px}.other-accounts{margin-top:16px}.other-accounts>summary{color:var(--muted);font-size:12px;min-height:44px;cursor:pointer}.next details{grid-column:1/-1}
 @media(max-width:520px){.account>header{padding:10px 14px 5px}.buckets{padding:4px 14px 8px}.bucket strong{font-size:24px;margin:4px 0 6px}.track{margin-bottom:6px}.bucket .reset{line-height:1.2}}
+.bucket .reset time{display:block;margin-top:4px;color:var(--text);font-size:10px;line-height:1.4}.paid-usage{padding:9px 20px 12px;border-top:1px solid var(--line);display:grid;gap:6px}.paid-usage>div{display:grid;grid-template-columns:1fr auto;gap:4px 8px;font-size:11px}.paid-usage strong{font-weight:550}.paid-usage small{grid-column:1/-1;color:var(--muted);font-size:10px;line-height:1.4}.paid-usage>.eyebrow{font-size:9px}@media(max-width:520px){.paid-usage{padding:8px 14px 10px}}

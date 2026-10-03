@@ -82,3 +82,18 @@ it('matches the official Cursor file-store locations on Mac and Linux',()=>{
  expect(credentialPath(target,'darwin','/users/test')).toBe('/users/test/.cursor/auth.json');
  expect(()=>credentialPath(target,'win32')).toThrow('usage_credential_store_unsupported');
 });
+
+it('publishes Claude extra-usage budget separately and preserves absent reset times',()=>{
+ const snapshot=claude({...claudeRaw,five_hour:{utilization:0,resets_at:null},extra_usage:{is_enabled:true,monthly_limit:10000,used_credits:2500}},'claude-personal',now).snapshot;
+ expect(snapshot.metadata.paid_usage?.[0]).toMatchObject({kind:'spending_limit',unit:'usd_cents',remaining:7500,used:2500,limit:10000,reset_at:null});
+ expect(snapshot.limits[0].reset_at).toBeNull();expect(snapshot.limits).toHaveLength(3);
+ const bad=claude({...claudeRaw,extra_usage:{is_enabled:true,used_credits:'invalid'}},'claude-personal',now).snapshot;
+ expect(bad.limits).toHaveLength(3);expect(bad.metadata.paid_usage_diagnostic).toBe('paid_usage_schema_unrecognized');
+});
+it('publishes Cursor on-demand budget without treating it as included capacity',()=>{
+ const snapshot=cursor({...cursorRaw,spendLimitUsage:{individualLimit:10000,individualUsed:3500,individualRemaining:6500}},'cursor-personal',now).snapshot;
+ expect(snapshot.metadata.paid_usage?.[0]).toMatchObject({kind:'spending_limit',unit:'usd_cents',remaining:6500,used:3500,limit:10000,reset_at:'2026-10-02T12:00:00.000Z'});
+ expect(snapshot.limits[0].remaining_fraction).toBe(.25);
+ const bad=cursor({...cursorRaw,spendLimitUsage:{individualUsed:'bad'}},'cursor-personal',now).snapshot;
+ expect(bad.limits[0].remaining_fraction).toBe(.25);expect(bad.metadata.paid_usage_diagnostic).toBe('paid_usage_schema_unrecognized');
+});

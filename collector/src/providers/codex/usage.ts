@@ -5,7 +5,7 @@ import { ingestSnapshot } from '@llm-usage/core';
 import { providerEnvironment, type Target } from '../types';
 const windowSchema=z.object({usedPercent:z.number().min(0).max(100),windowDurationMins:z.number().int().positive().nullable(),resetsAt:z.number().int().nonnegative().nullable()});
 const limits=z.object({limitId:z.string().nullable().optional(),normalModelSlug:z.string().nullable().optional(),
-  primary:windowSchema.nullable(),secondary:windowSchema.nullable(),spendControlReached:z.boolean().nullable().optional()});
+  primary:windowSchema.nullable(),secondary:windowSchema.nullable(),spendControlReached:z.boolean().nullable().optional(),credits:z.unknown().optional()});
 const responseSchema=z.object({ordinaryUsageAllowed:z.boolean().nullable().optional(),rateLimits:limits.nullable(),
   rateLimitsByLimitId:z.record(z.string(),limits).nullable().optional()});
 export function normalizeUsage(raw:unknown,accountId:string,now=new Date()){
@@ -20,8 +20,20 @@ export function normalizeUsage(raw:unknown,accountId:string,now=new Date()){
       window_seconds:b.windowDurationMins===null?null:b.windowDurationMins*60,
       observed_at:observed,reset_at:b.resetsAt===null?null:new Date(b.resetsAt*1000).toISOString(),source:'official_api',confidence:'provider_reported'}];
   }));
+  const creditSchema=z.object({hasCredits:z.boolean(),unlimited:z.boolean(),balance:z.string().regex(/^\d+(?:\.\d+)?$/).transform(Number).refine(Number.isFinite).nullable()});
+  const paid=[];let paidError=false;
+  // Limit IDs can report the same wallet: display one identical reading, not a sum.
+  const seen=new Set<string>();
+  for(const [id,snapshot] of snapshots){
+    if(snapshot.credits==null)continue;
+    const credit=creditSchema.safeParse(snapshot.credits);
+    if(!credit.success){paidError=true;continue;}
+    const signature=JSON.stringify(credit.data);if(seen.has(signature))continue;seen.add(signature);
+    paid.push({id:`credits-${paid.length}`,label:'Paid credits',kind:'balance',unit:'credits',remaining:credit.data.balance,
+      enabled:null,unlimited:credit.data.unlimited,observed_at:observed,reset_at:null});
+  }
   return {allowed:data.ordinaryUsageAllowed??null,
-    snapshot:ingestSnapshot.parse({account_id:accountId,provider:'openai',observed_at:observed,status:'ok',limits:buckets,metadata:{adapter_version:'codex-0.159.3'}})};
+    snapshot:ingestSnapshot.parse({account_id:accountId,provider:'openai',observed_at:observed,status:'ok',limits:buckets,metadata:{adapter_version:'codex-0.159.3',paid_usage:paid.slice(0,8), ...(paidError?{paid_usage_diagnostic:'paid_usage_schema_unrecognized'}:{})}})};
 }
 /** Query the official CLI app-server; no OAuth token extraction or private endpoint calls. */
 export function readUsage(target:Target):Promise<ReturnType<typeof normalizeUsage>>{

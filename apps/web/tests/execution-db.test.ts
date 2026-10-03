@@ -55,17 +55,19 @@ describe.skipIf(!enabled)('PostgreSQL execution lifecycle',()=>{
   await store.registerTarget({id:'quota-local',account_id:'quota-personal',worker_id:'quota-worker',mode:'local',repositories:['quota-repo'],model_classes:[],setup_minutes:0,billing:'subscription'});
   await store.reportHealth('quota-worker',{target_id:'quota-local',health:'ready',cooldown_until:null});
   const observed=new Date().toISOString();
-  await store.reportUsage('quota-worker',ingestSnapshot.parse({account_id:'quota-personal',provider:'anthropic',observed_at:observed,status:'ok',limits:[{
+  await store.reportUsage('quota-worker',ingestSnapshot.parse({account_id:'quota-personal',provider:'anthropic',observed_at:observed,status:'ok',metadata:{paid_usage:[{id:'extra',label:'Extra usage budget',kind:'spending_limit',unit:'usd_cents',remaining:9000,used:1000,limit:10000,enabled:true,observed_at:observed}]},limits:[{
    id:'five_hour',account_id:'quota-personal',kind:'session',scope:'all_models',unit:'fraction',observed_at:observed,
    remaining_fraction:.8,used_fraction:.2,reset_at:new Date(Date.now()+3600000).toISOString(),source:'local_collector',confidence:'provider_reported'
   }]}));
   const listed=(await store.listExecutionAccounts()).accounts.find(a=>a.id==='quota-personal');
   expect(listed?.usage?.limits[0].remaining_fraction).toBe(.8);
+  expect(listed?.usage?.paid_usage?.[0]).toMatchObject({remaining:9000,used:1000,limit:10000});
   const request=jobRequest.parse({repository:'quota-repo',prompt:'Fixture'});
   expect((await store.planTask(request)).selected?.usage).toBe('measured');
   await store.reportUsage('quota-worker',ingestSnapshot.parse({account_id:'quota-personal',provider:'anthropic',observed_at:new Date(Date.now()+1).toISOString(),status:'error',limits:[],metadata:{diagnostic_code:'usage_auth_required'}}));
   const failed=(await store.listExecutionAccounts()).accounts.find(a=>a.id==='quota-personal');
   expect(failed?.usage?.usage_diagnostic).toBe('usage_auth_required');
+  expect(failed?.usage?.paid_usage?.[0].remaining).toBe(9000);
   expect((await store.planTask(request)).selected?.usage).toBe('unknown');
  });
 
