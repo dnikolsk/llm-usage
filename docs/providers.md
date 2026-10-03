@@ -15,6 +15,19 @@ Usage is read **live**: the dashboard, `/v1/status` and MCP call the providers a
 
 All adapters normalize percentages and preserve provider reset timestamps. A missing reset remains null, and a passed reset requires a new observation. Paid credits, extra usage and on-demand spend do not expand included subscription capacity. Cursor's pool restrictions and conflicting percentage/dollar fields are documented in [model-to-pool routing](execution.md#bind-models-to-usage-pools).
 
+## What the dashboard numbers mean
+
+| Provider | Included subscription usage | Paid section | Missing values |
+| --- | --- | --- | --- |
+| Claude | Five-hour, seven-day and reported model windows | Extra-usage spending budget: used, limit and derived headroom, in USD | Disabled means the provider reported extra usage disabled; null amounts do not prove a zero wallet balance |
+| Codex | Primary/session and secondary/weekly windows | Provider credit balance | Credits are not tokens or dollars; no conversion is inferred |
+| Cursor | Included, Auto and API/named-model pools | On-demand spending used, limit and provider-reported remainder, in USD | A spending limit is not a prepaid balance; remaining may be unreported even when used/limit exist |
+| Gemini | Code Assist quota per model | No paid-credit reader implemented | Unknown stays unknown |
+
+Resets retain the provider's UTC timestamp; the dashboard renders Eastern Time, including daylight-saving changes. An idle Claude five-hour window may have no reset while its seven-day window still has one. Inspect each window separately. Paid data is display-only and cannot make a routing candidate eligible. See [missing-data troubleshooting](troubleshooting.md).
+
+## Live acceptance caveats
+
 Known caveats for live acceptance (each needs one real sign-in and a comparison against the provider's own usage screen):
 
 - Claude: a five-hour window that is idle reports no reset; the dashboard shows “Reset not reported”.

@@ -6,7 +6,9 @@ This is a **single-owner system**, not a multi-user hosted service. Each operato
 
 ## Start here
 
-**[Deploy your own dashboard on Vercel](docs/deploy-your-own.md)** — fork, generate private configuration, deploy, and connect your own subscription accounts. Give your setup agent [AGENTS.md](AGENTS.md).
+For your own hosted instance, follow one walkthrough: **[Clone → deploy → connect accounts → run tasks](docs/deploy-your-own.md)**. You can stop after connecting accounts if you only want the usage dashboard; a worker is needed only for coding tasks.
+
+Give your setup agent [AGENTS.md](AGENTS.md).
 
 - **Try it without provider accounts:** [local demo](docs/getting-started.md#local-demo).
 - **Run real coding tasks:** [connect a worker](docs/getting-started.md#connect-a-real-worker), then [submit your first task](docs/getting-started.md#submit-your-first-task).
@@ -20,9 +22,10 @@ Requirements: Node.js 22, pnpm **11.19.0**, PostgreSQL (validated with 17), Git,
 ```mermaid
 flowchart LR
   User[Dashboard / bot / MCP client] --> Web[Next.js service]
-  Web <--> DB[(PostgreSQL)]
-  Worker[Persistent CLI worker] --> Web
-  Worker --> Provider[Claude / Codex / Cursor]
+  Web <--> DB[(PostgreSQL: encrypted grants, usage and jobs)]
+  Web --> Usage[Provider usage APIs]
+  Worker[Persistent CLI worker] -->|Poll jobs and fetch access tokens| Web
+  Worker --> Provider[Claude / Codex / Cursor / Gemini]
   Worker --> Repo[Isolated task clones and patches]
 ```
 
@@ -67,5 +70,7 @@ node --test scripts/verify-execution.test.mjs
 ```
 
 The database integration suite is opt-in; [setup and validation](docs/getting-started.md#development-checks) explains how to run it. Fixture tests do not establish live provider authentication. Read [AGENTS.md](AGENTS.md) and [security](docs/security.md) before contributing. Use a feature branch and a PR describing behavior and validation; never commit credentials, provider profiles or real task artifacts.
+
+Documentation map: [setup walkthrough](docs/deploy-your-own.md), [local development and worker setup](docs/getting-started.md), [diagnose missing usage](docs/troubleshooting.md), [operations](docs/deployment.md), and [agent instructions](AGENTS.md).
 
 Further reference: [architecture](docs/architecture.md), [execution and routing](docs/execution.md), [usage-only routing](docs/routing.md), and [usage API OpenAPI](openapi/openapi.yaml). The OpenAPI file covers `/v1/status`, `/v1/route` and `/v1/ingest`; execution/MCP are documented separately.

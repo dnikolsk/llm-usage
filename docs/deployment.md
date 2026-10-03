@@ -2,7 +2,7 @@
 
 For a first independent deployment, follow [Deploy your own](deploy-your-own.md), including private role-file generation and agent instructions.
 
-Deploy a Next.js control service, PostgreSQL, and at least one persistent CLI worker. The service can run on Vercel or a Node host. Workers need their own long-lived Mac/Linux process and persistent storage; Vercel request handlers do not host CLI tasks.
+Deploy a Next.js control service, PostgreSQL, and, for coding tasks, at least one persistent CLI worker. The service can run on Vercel or a Node host. Workers need their own long-lived Mac/Linux process and persistent storage; Vercel request handlers do not host CLI tasks.
 
 This release is single-owner. Shared tokens grant the associated role across the deployment; they are not per-user permissions. Give other operators their own instance rather than exposing yours as a public multi-tenant service.
 
@@ -34,9 +34,9 @@ MCP accepts header-configured bearer authentication, not OAuth discovery. Reques
 
 1. Import your accessible repository/fork, select **Next.js**, and set the project root to `apps/web`. Enable access to files outside that root for workspace dependencies if the project settings require it; install using the checked-in pnpm workspace and lockfile.
 2. Provision PostgreSQL and configure the web-service secrets above for the intended Vercel environment. Preview and production should use separate databases and secrets; previews can otherwise operate production queues.
-3. From a trusted checkout at the release commit, inject the destination `DATABASE_URL` into a migration shell and run `pnpm db:migrate`. This applies all ordered migrations, including `0002_execution.sql`. Do not apply `seeds/demo.sql` to production.
+3. From a trusted checkout at the release commit, inject the destination `DATABASE_URL` into a migration shell and run `pnpm db:migrate`. This applies all ordered migrations, including `0002_execution.sql` and `0003_provider_sessions.sql`. Do not apply `seeds/demo.sql` to production.
 4. Deploy the web service. Confirm dashboard sign-in and authenticated `GET /v1/status` work. Once accounts are enrolled, check `/v1/execution/accounts` using `JOB_TOKEN` too.
-5. Enroll/start the persistent worker using the service's HTTPS origin, refresh usage, then complete a small task and inspect its patch.
+5. For coding tasks, enroll/start the persistent worker using the service's HTTPS origin, refresh usage, then complete a small task and inspect its patch.
 
 Deployment does not create provider sessions, start a worker, seed accounts, or grant provider-cloud repository access. Changes to Vercel environment variables require a new deployment to take effect.
 
@@ -67,6 +67,8 @@ A worker directory and filtered environment are not a security sandbox. Isolate 
 
 ## Troubleshooting
 
+Start with the [missing-data and diagnostic guide](troubleshooting.md). `usage:doctor` and `usage:sync` are retired; do not run old worker diagnostic commands against this release.
+
 For missing reset dates or paid balances, open `/connect`: an account that is not **Connected** cannot be read, and a **Sign in again** state names the diagnostic. `GET /v1/status` returns the per-account `observations` outcome of the live read.
 
 | Symptom | Check |
@@ -81,7 +83,7 @@ For missing reset dates or paid balances, open `/connect`: an account that is no
 | Cursor reports logged in but is unavailable | Backend model access may reject stored tokens; use the documented [reconnect flow](execution.md#cursor-says-logged-in-but-rejects-tokens) |
 | Jobs stay queued | Matching worker ID/token, allowed repository, supervised process, subscription eligibility |
 | `needs_review` | Inspect the existing job and remote process; an admin must resolve uncertainty before retrying |
-| Phone cannot open Claude login | Private HTTPS reachability, actual origin including port, current one-time link; see [connection flow](execution.md#prepared-personal-accounts) |
+| Phone cannot finish provider login | Start from your deployed HTTPS dashboard’s `/connect`, use the same browser for completion, and finish before the ten-minute attempt expires. No browser session on the worker is needed |
 | MCP client insists on OAuth | Use a client supporting bearer headers or an authenticated gateway; the server does not implement OAuth discovery |
 
 Collect diagnostic codes, timestamps and job IDs for a bug report. Redact secrets, session URLs, repository content and provider response bodies before sharing logs.
