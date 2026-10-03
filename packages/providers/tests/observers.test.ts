@@ -14,7 +14,7 @@ const fetchJson=(handler:(url:string,init:RequestInit)=>unknown|Response)=>vi.fn
 
 describe('observer registry',()=>{
  it('maps provider names and rejects unknown providers',()=>{
-  expect(observerFor('anthropic')).toBe(claude);expect(observerFor('openai')).toBe(codex);expect(observerFor('cursor')).toBe(cursor);expect(observerFor('google')).toBeNull();
+  expect(observerFor('anthropic')).toBe(claude);expect(observerFor('openai')).toBe(codex);expect(observerFor('cursor')).toBe(cursor);expect(observerFor('mistral')).toBeNull();
  });
  it('maps only known diagnostics',()=>{expect(diagnosticCode(new Error('usage_rate_limited'))).toBe('usage_rate_limited');expect(diagnosticCode(new Error('ECONNRESET secret'))).toBe('usage_unavailable');});
 });
@@ -112,5 +112,38 @@ describe('Cursor observer',()=>{
   const g:Grant={access_token:'secret-access',refresh_token:'secret-refresh',expires_at:null,claims:{},extra_tokens:{}};
   const usage=fetchJson(url=>url.endsWith('GetPlanInfo')?{}:{billingCycleEnd:'1793491200000',planUsage:{totalPercentUsed:1}});
   expect(JSON.stringify(await cursor.readUsage(g,'cursor-personal',{fetch:usage,now:clock}))).not.toContain('secret');
+ });
+});
+
+describe('Gemini observer',()=>{
+ it('runs the CLI code-paste flow, discovers the Code Assist project, reads per-model quota and writes a refresh-less store',async()=>{
+  const {gemini}=await import('../src/index');
+  const begun=gemini.begin({random});
+  const url=new URL(begun.authorization_url);
+  expect(url.origin+url.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
+  expect(url.searchParams.get('redirect_uri')).toBe('https://codeassist.google.com/authcode');expect(url.searchParams.get('access_type')).toBe('offline');
+  const send=fetchJson((u,init)=>{
+   if(u==='https://oauth2.googleapis.com/token'){const body=new URLSearchParams(init.body as string);
+    if(body.get('grant_type')==='authorization_code'){expect(body.get('code')).toBe('4/abc');expect(body.get('code_verifier')).toBe(begun.pending.verifier);return{access_token:'ga1',refresh_token:'gr1',expires_in:3599,id_token:jwt({email:'x@example.com'})};}
+    expect(body.get('refresh_token')).toBe('gr1');return{access_token:'ga2',expires_in:3599};}
+   if(u.endsWith(':loadCodeAssist'))return{cloudaicompanionProject:'proj-123',currentTier:{id:'standard-tier',name:'Google AI Pro'}};
+   if(u.endsWith(':retrieveUserQuota')){expect(JSON.parse(init.body as string)).toEqual({project:'proj-123'});
+    return{buckets:[{modelId:'gemini-2.5-pro',tokenType:'REQUESTS',remainingFraction:0.4,resetTime:'2026-10-02T07:00:00Z'},{modelId:'gemini-2.5-flash',tokenType:'REQUESTS',remainingFraction:0.9,resetTime:'2026-10-02T07:00:00Z'}]};}
+   throw new Error('unexpected '+u);
+  });
+  const granted=await gemini.complete(begun.pending,'4/abc',{fetch:send,now:clock});
+  expect(granted).toMatchObject({refresh_token:'gr1',expires_at:clock()+3_599_000,claims:{project:'proj-123',tier:'Google AI Pro'}});
+  const refreshed=await gemini.refresh(granted,{fetch:send,now:clock});
+  expect(refreshed).toMatchObject({access_token:'ga2',refresh_token:'gr1',claims:{project:'proj-123'}});
+  const reading=await gemini.readUsage(refreshed,'google-ai-pro-personal',{fetch:send,now:clock});
+  expect(reading.snapshot.limits.map(b=>[b.scope,b.kind,Number(b.remaining_fraction!.toFixed(2)),b.confidence])).toEqual([['all_models','daily',0.4,'estimated'],['gemini_2_5_pro','daily',0.4,'provider_reported'],['gemini_2_5_flash','daily',0.9,'provider_reported']]);
+  expect(reading.snapshot.metadata.display_label).toBe('Google AI Pro');
+  const [file]=gemini.credentialFiles(refreshed,'linux');
+  expect(file.path).toBe('.gemini/oauth_creds.json');expect(JSON.parse(file.content)).toMatchObject({access_token:'ga2',refresh_token:'',token_type:'Bearer'});expect(file.content).not.toContain('gr1');
+ });
+ it('rejects quota bodies without request buckets',async()=>{
+  const {normalizeUsage}=await import('../src/gemini');
+  expect(()=>normalizeUsage({buckets:[{modelId:'x',tokenType:'TOKENS',remainingFraction:0.5}]},'google-c',now)).toThrow('usage_schema_unrecognized');
+  expect(()=>normalizeUsage({},'google-c',now)).toThrow('usage_schema_unrecognized');
  });
 });

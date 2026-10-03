@@ -20,7 +20,7 @@ describe('sealed provider sessions',()=>{
   expect(readEnrollment(begun.cookie,1_000_001)).toMatchObject({account_id:'claude-personal',provider:'anthropic'});
   expect(readEnrollment(begun.cookie,1_000_000+11*60_000)).toBeNull();
   expect(readEnrollment('v1.garbage')).toBeNull();
-  expect(()=>beginEnrollment('x','google')).toThrow('provider_unsupported');
+  expect(()=>beginEnrollment('x','mistral')).toThrow('provider_unsupported');
   expect(enrollmentMessage('enrollment_pending')).toContain('not confirmed');
  });
 });

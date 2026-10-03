@@ -61,3 +61,23 @@ describe('official CLI boundaries',()=>{
   expect(codex.cloudState('[READY] A task')).toBe('ready');expect(codex.cloudState('some failure')).toBe('unknown');
  });
 });
+
+describe('Gemini CLI boundary',()=>{
+ it('treats the issued credential file as readiness and never spends quota to check it',async()=>{
+  const {mkdtemp,mkdir,writeFile,rm}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join}=await import('node:path');
+  const gemini=await import('../src/providers/gemini/index');
+  const dir=await mkdtemp(join(tmpdir(),'gemini-auth-'));
+  try{
+   expect(await gemini.authenticated(result(''),dir)).toBe(false);
+   await mkdir(join(dir,'.gemini'));await writeFile(join(dir,'.gemini','oauth_creds.json'),'{}');
+   expect(await gemini.authenticated(result(''),dir)).toBe(true);
+  }finally{await rm(dir,{recursive:true,force:true});}
+  expect(gemini.localArgs()).toEqual(['--prompt','','--approval-mode','auto_edit','--output-format','json']);
+  expect(gemini.localArgs()).not.toContain('--yolo');
+  expect(gemini.localResult('Loading…\n{"response":"Done.","session_id":"s1","stats":{}}')).toEqual({complete:true,session:'s1',summary:'Done.'});
+  expect(gemini.localResult('{"error":{"message":"quota"}}').complete).toBe(false);
+  expect(gemini.localResult('not json').complete).toBe(false);
+  const env=providerEnvironment({provider:'google',auth_dir:'/srv/accounts/gemini'} as Target);
+  expect(env.HOME).toBe('/srv/accounts/gemini');expect(env.NO_BROWSER).toBe('true');
+ });
+});

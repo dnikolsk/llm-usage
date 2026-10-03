@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { AccountState } from './index';
 
-export const executionProvider = z.enum(['anthropic', 'openai', 'cursor']);
+export const executionProvider = z.enum(['anthropic', 'openai', 'cursor', 'google']);
 export const executionMode = z.enum(['local', 'cloud']);
 export const identifier = z.string().regex(/^[a-z][a-z0-9_-]{1,79}$/);
 export const taskSpec = z.object({
@@ -61,7 +61,9 @@ export function decideExecution(accounts: ExecutionAccount[], targets: Execution
     const model=request.model_class?target.models?.[request.model_class]??null:
       previous?.model??target.default_model??(account?.provider==='cursor'?'auto':null);
     const quotaScope=account?.provider==='cursor'?(model==='auto'?'cursor_auto':model?'cursor_api':null):
-      account?.provider==='anthropic'?(model?.toLowerCase().includes('sonnet')?'sonnet':model?.toLowerCase().includes('opus')?'opus':null):null;
+      account?.provider==='anthropic'?(model?.toLowerCase().includes('sonnet')?'sonnet':model?.toLowerCase().includes('opus')?'opus':null):
+      // Gemini quota is per model; the bucket scope is the model id normalized the way the provider adapter does it.
+      account?.provider==='google'&&model?model.toLowerCase().replace(/^models\//,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,80):null;
     if(request.model_class&&!model)exclusions.push('model_binding_missing');
     if(target.mode==='cloud'&&model)exclusions.push('cloud_model_binding_unsupported');
     if(previous?.resumable&&account?.provider==='cursor'&&(!previous.model||previous.model!==model))exclusions.push('continuation_model_handoff_required');

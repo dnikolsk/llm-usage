@@ -8,7 +8,7 @@ export const workerConfig = z.object({
   usage_mirror:z.unknown().optional(),
   artifact_dir:z.string().startsWith('/'),
   targets:z.array(z.object({
-    id:z.string(), account_id:z.string(), provider:z.enum(['openai','anthropic','cursor']),
+    id:z.string(), account_id:z.string(), provider:z.enum(['openai','anthropic','cursor','google']),
     label:z.string().min(1).max(100).optional(), account_type:z.enum(['personal','work']).default('personal'),
     billing:z.enum(['subscription','paid','unknown']).default('unknown'), setup_minutes:z.number().int().min(0).default(0),
     mode:z.enum(['local','cloud']), binary:z.string().startsWith('/'), auth_dir:z.string().startsWith('/'),
@@ -33,6 +33,8 @@ export function providerEnvironment(target:Target):NodeJS.ProcessEnv {
   if(target.provider==='openai') env.CODEX_HOME=target.auth_dir;
   if(target.provider==='anthropic') env.CLAUDE_CONFIG_DIR=target.auth_dir;
   if(target.provider==='cursor'){env.AGENT_CLI_CREDENTIAL_STORE='file';env.CURSOR_CONFIG_DIR=target.auth_dir;env.CURSOR_AGENT_STORE_DIR=target.auth_dir+'/sessions';}
+  // Gemini CLI keeps its store under HOME/.gemini; an account-specific HOME isolates it like the other providers.
+  if(target.provider==='google'){env.HOME=target.auth_dir;env.NO_BROWSER='true';}
   return env;
 }
 export function command(target:Target):Run {

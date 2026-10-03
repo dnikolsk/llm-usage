@@ -1,7 +1,7 @@
 import type { Run } from '../types';
 import { jsonLines } from '../types';
 export const loginArgs=['login','--device-auth'];
-export async function authenticated(run:Run) {
+export async function authenticated(run:Run,_authDir?:string) {
   const result=await run(['login','status']);
   return result.code===0 && /logged in using chatgpt/i.test(result.stdout+'\n'+result.stderr);
 }

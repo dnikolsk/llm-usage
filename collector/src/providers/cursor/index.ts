@@ -1,7 +1,7 @@
 import type {Run} from '../types';
 import {jsonLines} from '../types';
 export const loginArgs=['login'];
-export async function authenticated(run:Run) {
+export async function authenticated(run:Run,_authDir?:string) {
   const result=await run(['status','--format','json']);
   try {
     const status=JSON.parse(result.stdout);

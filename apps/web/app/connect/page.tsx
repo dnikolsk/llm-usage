@@ -50,7 +50,7 @@ export default async function Connect({searchParams}:{searchParams:Promise<{acco
  </section>
  <details className="other-accounts"><summary>Add an account</summary><form method="post" action="/connect/accounts" className="add-account">
   <label>Account ID<input name="id" pattern="[a-z][a-z0-9_-]{1,79}" placeholder="claude-personal" required/></label>
-  <label>Provider<select name="provider" defaultValue="anthropic"><option value="anthropic">Claude</option><option value="openai">Codex</option><option value="cursor">Cursor</option></select></label>
+  <label>Provider<select name="provider" defaultValue="anthropic"><option value="anthropic">Claude</option><option value="openai">Codex</option><option value="cursor">Cursor</option><option value="google">Gemini</option></select></label>
   <label>Label<input name="label" maxLength={100} placeholder="Claude personal" required/></label>
   <label>Scope<select name="account_type" defaultValue="personal"><option value="personal">Personal</option><option value="work">Work</option></select></label>
   <button className="primary">Add account</button>

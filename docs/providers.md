@@ -7,6 +7,7 @@ Provider telemetry and login code lives in `packages/providers` (`@llm-usage/pro
 | Claude Code (`anthropic`) | PKCE against the public Claude Code client; paste the code Claude shows | `api.anthropic.com/api/oauth/usage`: five-hour, seven-day and model-specific windows, extra-usage budget | `auth_dir/.credentials.json` | Not implemented |
 | Codex / ChatGPT (`openai`) | PKCE against the public Codex CLI client; paste the loopback redirect address the browser lands on | `chatgpt.com/backend-api/wham/usage`: primary/secondary windows, credits | `auth_dir/auth.json` | Adapter available; requires a real cloud environment and authorized repository |
 | Cursor (`cursor`) | The CLI's browser hand-off; the service polls for completion | `api2.cursor.sh` `GetCurrentPeriodUsage` and `GetPlanInfo`: included/Auto/API pools | Linux `auth_dir/config/cursor/auth.json`; macOS `~/.cursor/auth.json` | Not implemented |
+| Gemini (`google`) | Google OAuth with the public Gemini CLI client; paste the code Google shows | Code Assist `retrieveUserQuota`: per-model daily request quota; the common allowance is the tightest model (labeled estimated) | `auth_dir/.gemini/oauth_creds.json`, with the CLI's HOME set to `auth_dir` | Not implemented |
 
 These are the authenticated endpoints the official clients use, not guaranteed public APIs. Authentication failure, rate limiting and schema changes produce diagnostics (`usage_auth_required`, `usage_rate_limited`, `usage_schema_unrecognized`, …) rather than fabricated capacity. Requests go only to fixed provider HTTPS origins with redirects disabled, with bounded response sizes; bodies are never surfaced.
 
@@ -19,5 +20,6 @@ Known caveats for live acceptance (each needs one real sign-in and a comparison 
 - Claude: a five-hour window that is idle reports no reset; the dashboard shows “Reset not reported”.
 - Codex: the backend usage endpoint and the pasted-redirect enrollment follow the CLI's current behavior and may change without notice. Until the Codex session is connected, Codex usage is unknown.
 - Cursor: tokens are JWTs whose expiry the service reads; a rejected refresh requires one new sign-in. On macOS the Cursor file store is shared by the OS user, so one Cursor identity per OS login.
+- Gemini: quota comes from the Code Assist API the Gemini CLI uses, which may differ from what the Gemini app shows for a Google AI Pro subscription. Quota is per model with a daily reset; the Gemini CLI has no auth-status command, so worker readiness means the service-issued credential file is present. Session continuation is not supported.
 
 The [mock collector](getting-started.md#local-demo) still seeds simulated Claude observations for the local demo only; it neither logs in nor proves anything about live reads.

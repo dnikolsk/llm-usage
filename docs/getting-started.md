@@ -67,7 +67,7 @@ node collector/bin/init-worker.mjs \
   --repository my-project=/absolute/path/my-project
 ```
 
-The generator currently prepares one personal account for each of the three providers. To run fewer providers, remove the unused entries from the generated `targets` array before registration; at least one target is required. Repeat `--repository` for each allowed project. Source repositories must be Git checkouts, and local jobs clone committed source only. A target's repository key, here `my-project`, is what clients use to submit work.
+The generator prepares one personal account for Claude, Codex and Cursor, plus Gemini when the tools manifest has a `gemini` entry. To run fewer providers, remove the unused entries from the generated `targets` array before registration; at least one target is required. Repeat `--repository` for each allowed project. Source repositories must be Git checkouts, and local jobs clone committed source only. A target's repository key, here `my-project`, is what clients use to submit work.
 
 The generated `worker.json` starts with `billing: "unknown"`, refuses to overwrite an existing file, and does not register or start anything. Alternatively, copy [worker.personal.example.json](../config/worker.personal.example.json) into private storage and edit every path/identity. Tokens are environment variables, never JSON values.
 
