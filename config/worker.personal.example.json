@@ -6,11 +6,11 @@
   "targets": [
     {
       "id": "worker-1-openai-local",
-      "account_id": "codex-personal",
+      "account_id": "chatgpt-personal",
       "provider": "openai",
       "mode": "local",
       "binary": "/absolute/path/to/codex",
-      "auth_dir": "/absolute/path/worker-state/accounts/codex-personal",
+      "auth_dir": "/absolute/path/worker-state/accounts/chatgpt-personal",
       "repositories": {
         "my-project": {
           "path": "/absolute/path/my-project"
@@ -22,7 +22,7 @@
     },
     {
       "id": "worker-1-anthropic-local",
-      "account_id": "claude-personal-main",
+      "account_id": "claude-personal",
       "provider": "anthropic",
       "mode": "local",
       "binary": "/absolute/path/to/claude",
