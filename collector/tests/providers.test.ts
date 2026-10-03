@@ -87,3 +87,9 @@ it('shows Codex paid credits without replenishing exhausted subscription quota',
  const bad=normalizeUsage({rateLimits:{primary:window,secondary:null,credits:{hasCredits:true,unlimited:false,balance:'not-a-balance'}}},'codex-personal');
  expect(bad.snapshot.limits[0].remaining_fraction).toBe(0);expect(bad.snapshot.metadata.paid_usage_diagnostic).toBe('paid_usage_schema_unrecognized');
 });
+
+it('keeps Codex wallet credits when per-model limits omit the wallet',()=>{
+ const window={usedPercent:25,windowDurationMins:300,resetsAt:null};
+ const result=normalizeUsage({rateLimits:{primary:window,secondary:null,credits:{hasCredits:true,unlimited:false,balance:'50'}},rateLimitsByLimitId:{codex:{primary:window,secondary:null}}},'codex-personal');
+ expect(result.snapshot.metadata.paid_usage?.[0].remaining).toBe(50);expect(result.snapshot.limits).toHaveLength(1);
+});

@@ -24,7 +24,8 @@ export function normalizeUsage(raw:unknown,accountId:string,now=new Date()){
   const paid=[];let paidError=false;
   // Limit IDs can report the same wallet: display one identical reading, not a sum.
   const seen=new Set<string>();
-  for(const [id,snapshot] of snapshots){
+  const wallets=[...snapshots,...(data.rateLimits?[data.rateLimits]:[])];
+  for(const snapshot of wallets.map(item=>Array.isArray(item)?item[1]:item)){
     if(snapshot.credits==null)continue;
     const credit=creditSchema.safeParse(snapshot.credits);
     if(!credit.success){paidError=true;continue;}
