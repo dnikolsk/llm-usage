@@ -4,7 +4,9 @@ Use your own GitHub copy, Vercel project, PostgreSQL database and provider subsc
 
 An agent can perform the steps below. Ask it:
 
-> Read AGENTS.md and docs/deploy-your-own.md, then set up my own instance. Reuse my existing authorization and ask me only for missing functional choices or account approvals. Store secrets through protected settings, never display them in chat. Connect my chosen providers, verify quota and a small patch-producing task, then verify an idle restart. Tell me which steps are verified and which still need my action.
+> Read AGENTS.md and docs/deploy-your-own.md, then set up my own instance. Reuse my existing authorization and ask me only for missing functional choices or account approvals. Store secrets through protected settings, never display them in chat. When it is time to connect providers, send me to my dashboard's /connect page; do not sign in to providers yourself. Verify live quota and a small patch-producing task, then verify an idle restart. Tell me which steps are verified and which still need my action.
+
+Already running an older instance? Follow the upgrade runbook in [AGENTS.md](../AGENTS.md#upgrade-an-existing-instance-to-live-provider-sessions) instead.
 
 ## 1. Create your hosting resources
 
@@ -29,7 +31,7 @@ The command creates a new private directory, mode 700, with mode-600 files. It r
 
 | File | Process allowed to receive its values |
 | --- | --- |
-| `web-secrets.json` | Vercel/Next.js service: database and all server-side role bindings |
+| `web-secrets.json` | Vercel/Next.js service: database, `SESSION_KEY` (encrypts stored provider logins) and all server-side role bindings |
 | `worker-secrets.json` | This worker only: its machine-specific token |
 | `client-secrets.json` | Bot/MCP client: job and usage-read tokens |
 | `operator-secrets.json` | Temporary migration/registration session: database and admin token |
@@ -38,7 +40,7 @@ The command creates a new private directory, mode 700, with mode-600 files. It r
 
 ## 3. Deploy your page
 
-Through your authorized Vercel tool or project environment settings, bind the keys in `web-secrets.json`'s `variables` object to server-side variables. Keep values out of tool output/chat and do not use `NEXT_PUBLIC_*` names. `DATABASE_URL`, `DASHBOARD_PASSWORD`, independent role tokens and `WORKER_WORKER_1_TOKEN` must have your own values.
+Through your authorized Vercel tool or project environment settings, bind the keys in `web-secrets.json`'s `variables` object to server-side variables. Keep values out of tool output/chat and do not use `NEXT_PUBLIC_*` names. `DATABASE_URL`, `SESSION_KEY`, `DASHBOARD_PASSWORD`, independent role tokens and `WORKER_WORKER_1_TOKEN` must have your own values. Back up `SESSION_KEY` with the rest of the bundle: if it is lost or rotated, every provider must be connected again.
 
 Run migrations with only the operator role:
 
@@ -54,16 +56,23 @@ The wrapper takes variables from the selected role file and basic OS/network set
 
 Follow [Connect a real worker](getting-started.md#connect-a-real-worker) to install CLIs, create a tools manifest, and generate the execution config. Use your Vercel HTTPS origin, `--worker-id worker-1`, and repository keys/paths you actually own. The provider defaults are personal Claude, Codex and Cursor; remove unrequested targets before registration.
 
-Sign in to your dashboard and open `/connect`. Add each account (same IDs as the worker config) and connect it: the page runs the provider's own sign-in and stores the login in your service, sealed with `SESSION_KEY`. This is subscription authentication: it does not require Anthropic/OpenAI/Cursor API keys, and the worker never logs in itself. Verify included billing/overage settings before marking targets `subscription`.
-
-Register and start the worker from the checkout:
+Register the accounts and targets from the checkout; this creates the account rows that `/connect` lists:
 
 ```sh
 pnpm setup:run --file "$HOME/.llm-usage-owner/operator-secrets.json" -- \
   pnpm --filter @llm-usage/collector register /absolute/path/worker-state/worker.json
+```
+
+Sign in to your dashboard and open `/connect`. Connect each account: the page starts the provider's own sign-in in your browser; you approve it and paste back what the provider shows (Claude shows a code; Codex lands on a `localhost` address you copy from the address bar; Cursor needs nothing, just continue). The login is stored in your service, sealed with `SESSION_KEY`, and each card turns **Live**. This is subscription authentication: it does not require Anthropic/OpenAI/Cursor API keys, and the worker never logs in itself. Verify included billing/overage settings before marking targets `subscription`, then re-register.
+
+Start the worker with only its own token:
+
+```sh
 pnpm setup:run --file "$HOME/.llm-usage-owner/worker-secrets.json" -- \
   pnpm --filter @llm-usage/collector worker /absolute/path/worker-state/worker.json
 ```
+
+It fetches short-lived access tokens from your service before each check and task and writes them into the configured `auth_dir`s; an account that is not connected at `/connect` shows as `needs_login`.
 
 The last command is a foreground process. Run it under your host supervisor for persistence, keeping exactly one active process. If service and worker are on different machines, bind only the worker token through that host's protected secret settings; do not transfer the entire owner bundle. The optional setup pack supports 1Password-backed startup; it needs an authorized desktop integration or a scoped cloud service account when your plan supports it.
 
@@ -87,4 +96,4 @@ Finally configure your bot/agent's authenticated Streamable HTTP MCP connection:
 
 The dashboard login password is separate from MCP authentication. Clients requiring OAuth discovery need an authenticated gateway; see [MCP reference](execution.md#mcp-and-rest). For browser clients, configure exact `MCP_ALLOWED_ORIGINS` on the service when required.
 
-Report success only after dashboard access, real quota, a reviewed task patch and an idle-restart check pass. See [operations and troubleshooting](deployment.md) for recovery, upgrades and credential rotation.
+Report success only after dashboard access, live quota that matches each provider's own usage screen, a reviewed task patch and an idle-restart check pass. See [operations and troubleshooting](deployment.md) for recovery, upgrades and credential rotation.

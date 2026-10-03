@@ -73,7 +73,7 @@ The generated `worker.json` starts with `billing: "unknown"`, refuses to overwri
 
 ### Sign in, confirm billing and register
 
-Sign in to the running dashboard and open `/connect`. Add the accounts your config retains (same account IDs) and connect each one by completing the provider's sign-in in your browser. The service keeps the login; the worker will fetch access tokens from it. Nothing is signed in on the worker machine. On macOS, Cursor's issued credential is written to the OS user's `~/.cursor/auth.json`, so use one Cursor identity per OS login.
+Register first (below) so the accounts exist, then sign in to the running dashboard, open `/connect` and connect each account by completing the provider's sign-in in your browser (Claude: paste the code; Codex: paste the `localhost` address the browser lands on; Cursor: just continue). The service keeps the login; the worker will fetch access tokens from it. Nothing is signed in on the worker machine. On macOS, Cursor's issued credential is written to the OS user's `~/.cursor/auth.json`, so use one Cursor identity per OS login.
 
 Verify included subscription access and provider overage settings. Set each verified target's `billing` to `subscription`; keep unverified targets `unknown`. There is no automatic paid fallback. Then load `ADMIN_TOKEN` temporarily from your secret manager and register:
 
