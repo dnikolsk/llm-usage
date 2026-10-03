@@ -39,14 +39,8 @@ async function limitedJson(response:Response){
   }finally{await reader.cancel().catch(()=>{});}
 }
 
-/** Only normalized quota fields leave this function; never return bodies, labels or errors. */
-export async function diagnoseUsage(config:WorkerConfig,options:Options,deps:Dependencies={}){
-  const env=deps.env??process.env,send=deps.fetch??fetch,collect=deps.collect??collectUsage,now=deps.now??new Date();
-  const control=serviceOrigin(config.service_url),dashboard=serviceOrigin(options.dashboard);
-  const controlTokenEnv=options.controlTokenEnv??'JOB_TOKEN',dashboardTokenEnv=options.dashboardTokenEnv??'LLM_USAGE_DASHBOARD_READ_TOKEN';
-  if(!/^[A-Z][A-Z0-9_]+$/.test(controlTokenEnv)||!/^[A-Z][A-Z0-9_]+$/.test(dashboardTokenEnv))throw new Error('invalid_token_variable');
-  if(control!==dashboard&&env[controlTokenEnv]&&env[controlTokenEnv]===env[dashboardTokenEnv])throw new Error('separate_service_tokens_required');
-  async function get(origin:string,path:string,tokenName:string,execution:boolean):Promise<ServiceRead>{
+async function get(origin:string,path:string,tokenName:string,execution:boolean,env:NodeJS.ProcessEnv,send:typeof fetch):Promise<ServiceRead>{
+    if(!/^[A-Z][A-Z0-9_]+$/.test(tokenName))throw new Error('invalid_token_variable');
     const token=env[tokenName];if(!token||token.length<32)return{status:'token_missing',accounts:[]};
     try{
       const response=await send(new URL(path,origin),{method:'GET',redirect:'error',headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(15000)});
@@ -59,9 +53,22 @@ export async function diagnoseUsage(config:WorkerConfig,options:Options,deps:Dep
       });
       return{status:'ok',accounts};
     }catch{return{status:'connection_or_schema_error',accounts:[]};}
-  }
-  const controlRead=await get(control,'/v1/execution/accounts',controlTokenEnv,true);
-  const dashboardRead=await get(dashboard,'/v1/status',dashboardTokenEnv,false);
+}
+
+export async function inspectDashboard(url:string,tokenName='LLM_USAGE_DASHBOARD_READ_TOKEN',deps:Pick<Dependencies,'env'|'fetch'>={}){
+  const origin=serviceOrigin(url);
+  return{origin,...await get(origin,'/v1/status',tokenName,false,deps.env??process.env,deps.fetch??fetch)};
+}
+
+/** Only normalized quota fields leave this function; never return bodies, labels or errors. */
+export async function diagnoseUsage(config:WorkerConfig,options:Options,deps:Dependencies={}){
+  const env=deps.env??process.env,send=deps.fetch??fetch,collect=deps.collect??collectUsage,now=deps.now??new Date();
+  const control=serviceOrigin(config.service_url),dashboard=serviceOrigin(options.dashboard);
+  const controlTokenEnv=options.controlTokenEnv??'JOB_TOKEN',dashboardTokenEnv=options.dashboardTokenEnv??'LLM_USAGE_DASHBOARD_READ_TOKEN';
+  if(!/^[A-Z][A-Z0-9_]+$/.test(controlTokenEnv)||!/^[A-Z][A-Z0-9_]+$/.test(dashboardTokenEnv))throw new Error('invalid_token_variable');
+  if(control!==dashboard&&env[controlTokenEnv]&&env[controlTokenEnv]===env[dashboardTokenEnv])throw new Error('separate_service_tokens_required');
+  const controlRead=await get(control,'/v1/execution/accounts',controlTokenEnv,true,env,send);
+  const dashboardRead=await get(dashboard,'/v1/status',dashboardTokenEnv,false,env,send);
   const checks:Check[]=[];
   const add=(status:Check['status'],code:string,account?:string)=>checks.push({status,code,...(account?{account}:{})});
   for(const [service,result] of [['control',controlRead],['dashboard',dashboardRead]] as const)add(result.status==='ok'?'pass':'blocked',`${service}_${result.status}`);
@@ -109,14 +116,17 @@ export async function diagnoseUsage(config:WorkerConfig,options:Options,deps:Dep
 /** Best-effort discovery of same-user processes, never printing command lines or environments. */
 export async function publisherCandidates(proc='/proc'){
   const candidates:{pid:number;executable:string;directory:string|null;scripts:string[];services:string[];worker_config:string|null}[]=[];
+  let otherUsers=0,unreadable=0,visible=0;
   let entries:string[];try{entries=await readdir(proc);}catch{return{status:'unavailable',candidates};}
   for(const entry of entries.filter(value=>/^\d+$/.test(value))){
     const pid=Number(entry);if(pid===process.pid||pid===process.ppid)continue;
     try{
-      if((await stat(`${proc}/${entry}`)).uid!==process.getuid?.())continue;
+      if((await stat(`${proc}/${entry}`)).uid!==process.getuid?.()){otherUsers++;continue;}
+      visible++;
       const args=(await readFile(`${proc}/${entry}/cmdline`,'utf8')).split('\0');
       const scripts=args.filter(arg=>/^[a-zA-Z0-9_./-]+\.(?:mjs|cjs|js|ts|py|sh)$/.test(arg)).map(arg=>basename(arg));
       const directory=await readlink(`${proc}/${entry}/cwd`).catch(()=>null);
+      if(directory?.split('/').some(part=>part.startsWith('llm-usage-diagnostic.')))continue;
       if(!scripts.some(script=>/usage|collector|worker/i.test(script))&&!directory?.includes('llm-usage'))continue;
       const cgroup=await readFile(`${proc}/${entry}/cgroup`,'utf8').catch(()=>'');
       const services=[...cgroup.matchAll(/(?:^|\/)([a-zA-Z0-9_.@-]+\.service)(?:\/|$)/gm)].map(match=>match[1]);
@@ -124,7 +134,7 @@ export async function publisherCandidates(proc='/proc'){
       const configArgument=workerIndex>=0?args[workerIndex+1]:null;
       const worker_config=directory&&configArgument&&/^[a-zA-Z0-9_./-]+\.json$/.test(configArgument)?resolve(directory,configArgument):null;
       candidates.push({pid,executable:basename(args[0]??''),directory,scripts,services,worker_config});
-    }catch{/* A process may exit or deny access during inspection. */}
+    }catch{unreadable++;}
   }
-  return{status:'candidates_only_not_proof_of_publisher',candidates};
+  return{status:'candidates_only_not_proof_of_publisher',same_user_processes_visible:visible,other_user_processes_skipped:otherUsers,unreadable_processes:unreadable,candidates};
 }

@@ -22,7 +22,11 @@ pnpm --filter @llm-usage/collector usage:doctor --discover \
   --collect --output "$REPORT_DIR/report.json"
 ```
 
-`--discover` inspects same-user Linux processes and accepts exactly one distinct, valid config referenced by a running `worker.ts`/`worker.js` or `usage-sync.ts`/`usage-sync.js`. If none or several are found, it writes a blocked report. It never guesses between configurations. On Macs or when the worker is stopped, replace `--discover` with the absolute path of the existing worker JSON. This is a config file, not a provider credential file.
+`--discover` first inspects same-user Linux processes for configs referenced by `worker.ts`/`worker.js` or `usage-sync.ts`/`usage-sync.js`. It excludes the temporary diagnostic checkout itself. If no valid running config is visible, it checks saved worker JSON files and relevant systemd/cron definitions in the user's home and common service locations. It can inspect one level of a static service launcher, but never sources it, runs it, or reads its environment files. Searches skip dependency caches, auth profiles, example configs and secret files, and report entry/depth limits and unreadable locations.
+
+The report now includes host/user identity, process visibility counts, possible container isolation, saved config paths, and service references. A uniquely referenced service config may be selected after a complete search. Unreferenced saved files or ambiguous/incomplete results are reported for explicit selection rather than used to execute provider CLIs. `worker_config_not_found` means discovery couldn't locate a configuration in the accessible view; it does not establish that the real worker is stopped or missing. The Vercel read check runs even when worker discovery is blocked.
+
+Use repeatable `--search-root /absolute/directory` flags to limit config discovery to known locations, including which running-process references may be selected. On Macs or when automatic selection is blocked, replace `--discover` with the exact existing worker JSON path shown in the report. This is a config file, not a provider credential file. Don't start or restart a worker merely to make discovery succeed.
 
 Exit codes: **0** means all requested checks passed; **2** means the report contains a failure, blocked check or provider-unreported value; **1** means the diagnostic itself could not run. Exit 2 is expected while diagnosing this issue: send the report rather than attempting repairs. The output path must be new; reports are created with mode `0600` and existing files are never overwritten.
 
@@ -39,5 +43,6 @@ Interpretation:
 | `dashboard_account_unavailable` | Missing read access or a missing/mismatched destination account ID |
 | `token_missing`, `http_401`, `http_403` | The service could not be inspected; other report sections may still be useful |
 | `worker_config_not_found`, `worker_config_ambiguous` | Discovery could not select one running worker configuration |
+| `worker_config_requires_selection` | Saved configs were found, but none could be selected safely from the available service/process evidence |
 
 Send `report.json` back for analysis. Do not send environment files, service definitions, provider session files or raw provider responses. The diagnostic does not enable [usage mirroring](execution.md#a-separate-vercel-usage-dashboard); installing the fix is a separate maintenance step after identifying the active publisher.
