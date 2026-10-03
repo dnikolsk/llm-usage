@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import type {IngestSnapshot} from '@llm-usage/core';
 
-export const providerName=z.enum(['anthropic','openai','cursor']);
+export const providerName=z.enum(['anthropic','openai','cursor','google']);
 export type ProviderName=z.infer<typeof providerName>;
 
 /** One provider login held by the service. Refresh material never leaves the service. */

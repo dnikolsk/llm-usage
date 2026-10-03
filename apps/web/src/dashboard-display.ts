@@ -1,5 +1,5 @@
 import type {AccountState,UsageBucket} from '@llm-usage/core';
-export const names:Record<string,string>={anthropic:'Claude',openai:'Codex',cursor:'Cursor',google:'Google AI Pro'};
+export const names:Record<string,string>={anthropic:'Claude',openai:'Codex',cursor:'Cursor',google:'Gemini'};
 export function percent(n:number|null){return n===null?'—':`${Number((n*100).toFixed(1))}%`;}
 export function time(iso:string|null){return iso?new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(new Date(iso)):'Not reported';}
 export function reset(iso:string|null,now:Date){
@@ -14,7 +14,7 @@ export function label(b:UsageBucket){
  if(b.scope==='cursor_auto')return 'Auto';if(b.scope==='cursor_api')return 'Other models';
  if(b.scope==='cursor_models')return 'Own models';if(b.scope==='other_models')return 'Other models';
  if(b.scope!=='all_models')return b.scope.replaceAll('_',' ');
- return b.kind==='session'?'Session':b.kind==='weekly'?'Weekly':'Included';
+ return b.kind==='session'?'Session':b.kind==='weekly'?'Weekly':b.kind==='daily'?'Daily':'Included';
 }
 export function liveRemaining(account:AccountState,b:UsageBucket,now:Date){
  const age=+now-Date.parse(b.observed_at);

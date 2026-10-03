@@ -3,6 +3,7 @@
   "providers": {
     "codex": {"binary": "/absolute/path/to/codex", "auth_dir": "/absolute/path/worker-state/accounts/codex-personal"},
     "claude": {"binary": "/absolute/path/to/claude", "auth_dir": "/absolute/path/worker-state/accounts/claude-personal"},
-    "cursor-agent": {"binary": "/absolute/path/to/cursor-agent", "auth_dir": "/absolute/path/worker-state/accounts/cursor-personal"}
+    "cursor-agent": {"binary": "/absolute/path/to/cursor-agent", "auth_dir": "/absolute/path/worker-state/accounts/cursor-personal"},
+    "gemini": {"binary": "/absolute/path/to/gemini", "auth_dir": "/absolute/path/worker-state/accounts/google-ai-pro-personal"}
   }
 }

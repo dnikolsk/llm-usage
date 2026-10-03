@@ -1,7 +1,7 @@
 import type {Run} from '../types';
 import {jsonLines} from '../types';
 export const loginArgs=['auth','login','--claudeai'];
-export async function authenticated(run:Run) {
+export async function authenticated(run:Run,_authDir?:string) {
   const result=await run(['auth','status','--json']);
   if(result.code!==0)return false;
   try {const status=JSON.parse(result.stdout);return status.loggedIn===true && status.authMethod==='claude.ai';}catch{return false;}

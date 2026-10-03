@@ -7,6 +7,7 @@ import * as codex from './providers/codex/index';
 import {executionModel} from './execution-model';
 import * as claude from './providers/claude/index';
 import * as cursor from './providers/cursor/index';
+import * as gemini from './providers/gemini/index';
 const config=workerConfig.parse(JSON.parse(await readFile(process.argv[2]??'', 'utf8')));
 if(config.usage_mirror!==undefined)console.error('worker.json: usage_mirror is retired and ignored; the service reads usage from its own provider sessions.');
 const token=process.env[config.token_env];
@@ -17,7 +18,7 @@ async function api(path:string,body:unknown):Promise<any>{
   const response=await fetch(new URL('/v1/execution/worker/'+path,service),{method:'POST',headers:{Authorization:`Bearer ${token}`,'X-Worker-Id':config.worker_id,'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15_000)});
   if(!response.ok)throw new Error(`service_${response.status}`);return response.json();
 }
-const adapter=(target:Target)=>target.provider==='openai'?codex:target.provider==='anthropic'?claude:cursor;
+const adapter=(target:Target)=>target.provider==='openai'?codex:target.provider==='anthropic'?claude:target.provider==='google'?gemini:cursor;
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
 /** Access material comes from the service's provider session; this worker never holds a refresh token or logs in itself. */
 const credentialsUntil=new Map<string,number>();
@@ -51,7 +52,7 @@ for(const signal of ['SIGINT','SIGTERM'] as const)process.on(signal,()=>{stoppin
 async function health(target:Target){
   const supported=target.mode==='local'||target.provider==='openai';
   let ready=false;
-  try{ready=supported&&await ensureCredentials(target)&&await adapter(target).authenticated(command(target));}catch{}
+  try{ready=supported&&await ensureCredentials(target)&&await adapter(target).authenticated(command(target),target.auth_dir);}catch{}
   await api('health',{target_id:target.id,health:!ready?(supported?'needs_login':'unavailable'):'ready'});
   return ready;
 }

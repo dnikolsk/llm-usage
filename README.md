@@ -1,6 +1,6 @@
 # LLM Usage
 
-Self-hosted subscription usage monitoring and coding-task orchestration for Claude Code, Codex and Cursor. Connect each provider once in the dashboard; the service then reads remaining allowance and reset times live from the providers on every view, routes work with an explainable planner, and submits repository tasks through MCP or HTTP. Workers receive short-lived access tokens from the service, run the providers' CLIs and return patches for review.
+Self-hosted subscription usage monitoring and coding-task orchestration for Claude Code, Codex, Cursor and Gemini CLI. Connect each provider once in the dashboard; the service then reads remaining allowance and reset times live from the providers on every view, routes work with an explainable planner, and submits repository tasks through MCP or HTTP. Workers receive short-lived access tokens from the service, run the providers' CLIs and return patches for review.
 
 This is a **single-owner system**, not a multi-user hosted service. Each operator deploys their own instance and authorizes their own provider accounts. CLI execution and telemetry depend on the provider's current authentication, subscription and endpoint behavior.
 
@@ -31,9 +31,9 @@ The web service owns provider sessions (encrypted), live usage reads, routing an
 | Capability | Current support |
 | --- | --- |
 | Usage dashboard | Password protected, phone-friendly; every view reads the providers live (20-second shared window); display timezone is Eastern Time |
-| Quotas and resets | Claude, Codex and Cursor authenticated telemetry read by the service from its own provider sessions, with freshness and diagnostics |
+| Quotas and resets | Claude, Codex, Cursor and Gemini authenticated telemetry read by the service from its own provider sessions, with freshness and diagnostics |
 | Provider sign-in | Once per provider at `/connect`; workers never log in themselves |
-| Worker CLI execution | Claude, Codex and Cursor |
+| Worker CLI execution | Claude, Codex, Cursor and Gemini |
 | Provider-hosted execution | Codex adapter; requires your configured provider environment and repository |
 | MCP | Authenticated Streamable HTTP at `/mcp`; configurable bearer headers required, no OAuth discovery |
 | Results | Git patches and job status; no automatic PR creation or deployment |
