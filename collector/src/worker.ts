@@ -4,12 +4,14 @@ import { spawn } from 'node:child_process';
 import { workerConfig, command, type Target } from './providers/types';
 import * as codex from './providers/codex/index';
 import {collectUsage} from './usage';
+import {createUsageMirror} from './usage-mirror';
 import {executionModel} from './execution-model';
 import * as claude from './providers/claude/index';
 import * as cursor from './providers/cursor/index';
 const config=workerConfig.parse(JSON.parse(await readFile(process.argv[2]??'', 'utf8')));
 const token=process.env[config.token_env];
 if(!token||token.length<32)throw new Error('worker_token_required');
+const mirrorUsage=createUsageMirror(config);
 const service=new URL(config.service_url);
 if(service.protocol!=='https:' && !(service.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(service.hostname)))throw new Error('https_required');
 async function api(path:string,body:unknown):Promise<any>{
@@ -31,6 +33,7 @@ async function health(target:Target){
   if(ready&&Date.now()-(usageChecked.get(target.account_id)??0)>60_000){
     const usage=await collectUsage(target);
     await api('usage',usage.snapshot);
+    await mirrorUsage(usage.snapshot);
     usageChecked.set(target.account_id,Date.now()+(usage.snapshot.metadata.diagnostic_code==='usage_rate_limited'?240_000:0));
     if(usage.allowed===false)usageDenied.add(target.account_id);else if(usage.allowed===true)usageDenied.delete(target.account_id);
   }

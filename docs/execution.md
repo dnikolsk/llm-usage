@@ -180,3 +180,23 @@ Paid telemetry is stored separately in snapshot `metadata.paid_usage` and expose
 Provider-unreported amounts remain unknown, not zero. Malformed optional paid telemetry produces `paid_usage_schema_unrecognized` without discarding valid included quota. Failed/stale observations and passed paid-period resets are shown as needing refresh, with last values identified as historical. No paid fallback or additional spending authorization is added.
 
 Deploy the web and worker code together; while the worker is idle, update/restart it and run `usage:sync` to publish these newly collected fields. Compare paid values and reset dates against each provider's usage screen before claiming live acceptance. No database migration is needed; paid telemetry uses validated snapshot metadata.
+
+### A separate Vercel usage dashboard
+
+A worker sends usage to its configured `service_url`. If MCP/control runs on a private host and Vercel uses a different database, updating either web deployment does not copy usage between them. Configure the worker to mirror the same normalized snapshots instead of maintaining a second provider scraper:
+
+```json
+"usage_mirror": {
+  "service_url": "https://YOUR_DASHBOARD.vercel.app",
+  "token_env": "WORKER_DASHBOARD_WRITE_TOKEN",
+  "account_ids": {
+    "codex-personal": "chatgpt-personal"
+  }
+}
+```
+
+Add this optional object to the existing worker JSON. `account_ids` maps worker account IDs to existing dashboard account IDs; omit mappings when IDs already agree. Destination accounts must already exist and belong to the matching provider. Inject the dashboard's existing `WRITE_TOKEN` as `WORKER_DASHBOARD_WRITE_TOKEN` through the worker supervisor's secret settings. It must differ from the private worker token. Keep the private control `service_url` and provider profiles intact. No provider credentials, dashboard password or database credentials go to the mirror.
+
+The supervised worker and `usage:sync` both publish complete snapshots to the dashboard's `/v1/ingest`, retaining UTC reset dates, paid telemetry, adapter version and failed-refresh diagnostics. Identical observations have stable idempotency keys. Mirror failures are logged without response bodies and do not stop task execution; `usage:sync` exits unsuccessfully if the mirror rejects a snapshot. Absent provider reset dates stay absent.
+
+During migration, identify and stop the old dashboard publisher so it cannot overwrite current telemetry with newer but incomplete readings. Update the worker while idle, inject the write credential, restart the single supervised instance, and run `usage:sync`. Verify the dashboard's `/v1/status` (using its own `READ_TOKEN`) and private MCP show the same observation time, reset dates and paid amounts. Check a second automatic refresh before declaring the connection healthy. Empty metadata or different bucket IDs on the dashboard identify a different publishing path; a successful private MCP refresh alone is insufficient.

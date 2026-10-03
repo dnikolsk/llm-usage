@@ -25,10 +25,19 @@ if(process.argv[2]==='app-server'){
 }
 `);await chmod(binary,0o700);
   let claimed=false;let finish:(data:any)=>void=()=>{};
+  const mirrored:any[]=[];
   const completed=new Promise<any>(resolve=>{finish=resolve;});
   const id='11111111-1111-4111-8111-111111111111';
   const server=createServer(async(req,res)=>{
    let body='';for await(const part of req)body+=part.toString();const data=JSON.parse(body||'{}');
+   if(req.url==='/v1/ingest'){
+    expect(req.headers.authorization).toBe('Bearer '+'d'.repeat(40));
+    expect(req.headers['x-worker-id']).toBeUndefined();
+    mirrored.push(data);
+    // An unavailable dashboard must not prevent the Cursor coding task from running.
+    res.writeHead(provider==='cursor'?503:201,{'Content-Type':'application/json'});
+    res.end(JSON.stringify({result:'created'}));return;
+   }
    expect(req.headers.authorization).toBe('Bearer '+ 't'.repeat(40));expect(req.headers['x-worker-id']).toBe('fixture-worker');
    let result:unknown={};
    if(req.url?.endsWith('/claim')){result=claimed?null:{id,account_id:'fixture-personal',target_id:'fixture-local',decision:{selected:{model:provider==='cursor'?'auto':null,quota_scope:provider==='cursor'?'cursor_auto':null}},lease_token:'a'.repeat(64),request:{repository:'fixture-repo',prompt:'Change the fixture file.'}};claimed=true;}
@@ -38,12 +47,14 @@ if(process.argv[2]==='app-server'){
   });
   server.listen(0,'127.0.0.1');await once(server,'listening');
   const port=(server.address() as {port:number}).port;
-  const path=join(root,'worker.json');await writeFile(path,JSON.stringify({service_url:`http://127.0.0.1:${port}`,worker_id:'fixture-worker',token_env:'WORKER_FIXTURE_TOKEN',artifact_dir:join(root,'artifacts'),targets:[{id:'fixture-local',account_id:'fixture-personal',provider,mode:'local',binary,auth_dir:join(root,'auth'),repositories:{'fixture-repo':{path:repo}}}]}));
-  const child=spawn(process.execPath,[fileURLToPath(new URL('../node_modules/tsx/dist/cli.mjs',import.meta.url)),'src/worker.ts',path],{cwd:fileURLToPath(new URL('..',import.meta.url)),env:{...process.env,WORKER_FIXTURE_TOKEN:'t'.repeat(40)},stdio:'ignore'});
+  const path=join(root,'worker.json');await writeFile(path,JSON.stringify({service_url:`http://127.0.0.1:${port}`,worker_id:'fixture-worker',token_env:'WORKER_FIXTURE_TOKEN',artifact_dir:join(root,'artifacts'),usage_mirror:{service_url:`http://127.0.0.1:${port}`,token_env:'WORKER_DASHBOARD_WRITE_TOKEN',account_ids:{'fixture-personal':'dashboard-personal'}},targets:[{id:'fixture-local',account_id:'fixture-personal',provider,mode:'local',binary,auth_dir:join(root,'auth'),repositories:{'fixture-repo':{path:repo}}}]}));
+  const child=spawn(process.execPath,[fileURLToPath(new URL('../node_modules/tsx/dist/cli.mjs',import.meta.url)),'src/worker.ts',path],{cwd:fileURLToPath(new URL('..',import.meta.url)),env:{...process.env,WORKER_FIXTURE_TOKEN:'t'.repeat(40),WORKER_DASHBOARD_WRITE_TOKEN:'d'.repeat(40)},stdio:'ignore'});
   let timer:ReturnType<typeof setTimeout>|undefined;
   try{
    const result=await Promise.race([completed,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('Worker did not finish fixture')),15000);})]);
    expect(result.state).toBe('succeeded');expect(result.patch).toContain('+after');expect(result.session_id).toBe('fixture-session');
+   expect(mirrored).toHaveLength(1);
+   expect(mirrored[0]).toMatchObject({account_id:'dashboard-personal',provider});
    expect(await readFile(join(repo,'sample.txt'),'utf8')).toBe('before\n');
    expect(await readFile(join(root,'artifacts',id,'changes.patch'),'utf8')).toBe(result.patch);
   }finally{

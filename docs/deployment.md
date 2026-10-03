@@ -72,6 +72,7 @@ A worker directory and filtered environment are not a security sandbox. Isolate 
 | Database/service returns 503 | Database reachability, required migrations, server logs without credential dumps |
 | No eligible route | Plan exclusions: billing confirmation, repository key, worker health, model binding, quota freshness/exhaustion |
 | Quotas unknown or stale | Run worker `usage:sync` while idle; inspect diagnostic codes and provider access rather than assuming full allowance |
+| Private MCP has usage but Vercel lacks dates or paid balances | Check whether they use different services/databases; configure [usage mirroring](execution.md#a-separate-vercel-usage-dashboard) and retire the old publisher |
 | Cursor reports logged in but is unavailable | Backend model access may reject stored tokens; use the documented [reconnect flow](execution.md#cursor-says-logged-in-but-rejects-tokens) |
 | Jobs stay queued | Matching worker ID/token, allowed repository, supervised process, subscription eligibility |
 | `needs_review` | Inspect the existing job and remote process; an admin must resolve uncertainty before retrying |
