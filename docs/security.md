@@ -12,6 +12,20 @@ Mitigations in place:
 - Refresh happens only in the service, only when a token is within two minutes of expiry, and a rejected refresh marks the session `reconnect_required` without deleting it or inventing capacity.
 - Each provider grant is separate and revocable at the provider; disconnecting in the dashboard deletes the stored grant but does not revoke it upstream.
 
+## Credential boundaries
+
+```mermaid
+flowchart LR
+  Owner[Owner browser] -->|Provider approval at /connect| Web[Web service]
+  Key[LLM_SESSION_KEY in hosting secrets] --> Web
+  Web -->|Encrypted grants| DB[(PostgreSQL)]
+  Worker[Worker with its own token] -->|Request assigned account access| Web
+  Web -->|Access token only| Worker
+  Bot[Bot with JOB_TOKEN] -->|Tasks and results| Web
+```
+
+The owner may store bootstrap role files in 1Password or another protected secret store. The running worker receives only its own role token; it does not receive the database URL, encryption key, admin token or provider refresh grants. Keep private bootstrap files outside the checkout. A secret manager still requires its own host authorization; it does not replace provider approval at `/connect`.
+
 ## Service credentials
 
 Role tokens are separate, at least 32 characters, compared in constant time: `READ_TOKEN` (status/route), `JOB_TOKEN` (MCP and job submission), `ADMIN_TOKEN` (registration and manual resolution), `WORKER_<ID>_TOKEN` (one per worker: health, leases, results, credential issuance), `DASHBOARD_PASSWORD` (dashboard cookie), `LLM_SESSION_KEY` (grant encryption). `WRITE_TOKEN` now authorizes only the local demo's simulated observations on `/v1/ingest`; any real pushed usage is refused with `410 ingest_retired`.

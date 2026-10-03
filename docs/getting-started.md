@@ -1,5 +1,7 @@
 # Getting started
 
+For an independent hosted dashboard, start with [Deploy your own](deploy-your-own.md). This page covers local development and the optional coding worker.
+
 Run commands from the repository root unless a step says otherwise. Use Bash or Zsh for the shell examples. Install Node.js 22, pnpm 11.19.0, Git and PostgreSQL with `psql`/`createdb` available. A managed PostgreSQL database is also suitable. Clone your accessible copy/fork of this repository, then:
 
 ```sh
@@ -54,9 +56,14 @@ The mock collector runs once. Repeat it for another observation; old values even
 
 Follow [deployment](deployment.md) or the local service steps above **without the demo seed**. In addition to the database/dashboard settings, provision independent `JOB_TOKEN`, `ADMIN_TOKEN`, and `WORKER_WORKER_1_TOKEN` secrets on the service. The example worker ID is `worker-1`; the same worker token must reach that worker. Remote service URLs must use HTTPS; loopback HTTP is supported for local development.
 
-On the persistent worker, clone this repository and the Git repositories it may edit, and install dependencies here with `pnpm install --frozen-lockfile`. Install the official [Claude Code](https://code.claude.com/docs/en/setup), [Codex](https://developers.openai.com/codex/cli) and [Cursor CLI](https://cursor.com/docs/cli/installation) clients, or use the optional [machine setup pack](https://github.com/dnikolsk/ai-builder-tools/tree/feat/cloud-subscription-workers/machine). Inspect repository access using the host's existing Git authentication before requesting another credential.
+On the persistent worker, clone this repository and the Git repositories it may edit, and install dependencies here with `pnpm install --frozen-lockfile`. Install the official clients for the providers you intend to run: [Claude Code](https://code.claude.com/docs/en/setup), [Codex](https://developers.openai.com/codex/cli) and [Cursor CLI](https://cursor.com/docs/cli/installation), or use the optional [machine setup pack](https://github.com/dnikolsk/ai-builder-tools/tree/feat/cloud-subscription-workers/machine). Inspect repository access using the host's existing Git authentication before requesting another credential.
 
-Create a private persistent state directory outside the checkout. Save a tools manifest based on [tools.example.json](../config/tools.example.json), replacing every path with the absolute installed binary and chosen persistent authentication directory. Use the real CLI binary paths, not wrappers selecting another account. The manifest contains paths only; it contains no passwords or tokens.
+Create a private persistent state directory outside the checkout. Choose one configuration path:
+
+- **One or two providers:** copy [worker.personal.example.json](../config/worker.personal.example.json), remove unused targets (keep at least one), and replace every path, service origin and account ID. This avoids requiring manifest entries for providers you do not use.
+- **Claude, Codex and Cursor together:** use the generator below. Optionally include Gemini by installing its [official CLI](https://github.com/google-gemini/gemini-cli) and adding a `gemini` manifest entry.
+
+For the generator, save a tools manifest based on [tools.example.json](../config/tools.example.json), replacing every path with the absolute installed binary and chosen persistent authentication directory. Use absolute installed binary paths (inspect with `command -v claude`, `command -v codex`, and `command -v cursor-agent`), not wrappers selecting another account. The generator requires all three base manifest entries; omit the optional `gemini` entry unless installed. The manifest contains paths only; it contains no passwords or tokens.
 
 ```sh
 node collector/bin/init-worker.mjs \
@@ -73,14 +80,17 @@ The generated `worker.json` starts with `billing: "unknown"`, refuses to overwri
 
 ### Sign in, confirm billing and register
 
-Register first (below) so the accounts exist, then sign in to the running dashboard, open `/connect` and connect each account by completing the provider's sign-in in your browser (Claude: paste the code; Codex: paste the `localhost` address the browser lands on; Cursor: just continue). The service keeps the login; the worker will fetch access tokens from it. Nothing is signed in on the worker machine. On macOS, Cursor's issued credential is written to the OS user's `~/.cursor/auth.json`, so use one Cursor identity per OS login.
+1. Sign into your hosted dashboard and open `/connect`. Add the requested accounts if necessary, or use the accounts already created during hosted setup. Make each worker target's `account_id` match exactly. Multiple machines using one login must reuse its account ID.
+2. Connect each account in your browser: Claude returns a code; Codex returns a localhost redirect address to copy; Cursor needs approval followed by **I signed in — continue**. Gemini uses the code described on its page. Paste only into `/connect`. The service keeps the grant; the worker fetches access tokens. On macOS, Cursor writes to the OS user's `~/.cursor/auth.json`, so use one Cursor identity per OS login.
+3. Verify included subscription access and provider overage settings. Set each verified target's `billing` to `subscription`; leave unverified targets `unknown`. No automatic paid fallback exists.
+4. Temporarily inject `ADMIN_TOKEN` from your secret manager into a dedicated operator shell and register:
 
-Verify included subscription access and provider overage settings. Set each verified target's `billing` to `subscription`; keep unverified targets `unknown`. There is no automatic paid fallback. Then load `ADMIN_TOKEN` temporarily from your secret manager and register:
+   ```sh
+   pnpm --filter @llm-usage/collector register /absolute/path/worker-state/worker.json
+   unset ADMIN_TOKEN
+   ```
 
-```sh
-pnpm --filter @llm-usage/collector register /absolute/path/worker-state/worker.json
-unset ADMIN_TOKEN
-```
+If you generated private role files, use the [operator-role wrapper](deploy-your-own.md#6-add-a-coding-worker) instead. Registration can also create account rows before you connect them; it does not prove sign-in or usage readiness. Re-register after changing billing, account IDs or model mappings.
 
 In a dedicated worker shell/supervisor, inject only its `WORKER_WORKER_1_TOKEN` and required OS settings, then run:
 
@@ -91,6 +101,8 @@ pnpm --filter @llm-usage/collector worker /absolute/path/worker-state/worker.jso
 Do not source the web service's entire environment into the worker: it does not need database, admin, dashboard or bot credentials. The worker publishes health and fetches access tokens with its own token; usage is read by the service. Keep the process running and supervise one instance per worker. See [operations](deployment.md#operate-and-upgrade).
 
 ## Submit your first task
+
+To test a specific provider, add `"provider":"anthropic"`, `"provider":"openai"`, `"provider":"cursor"` or `"provider":"google"` to the plan and submission JSON below. Use a fresh idempotency key for each new task.
 
 Use a separate bot/client shell with only `JOB_TOKEN` and your service URL supplied through secret settings. First inspect account readiness and ask for a plan:
 

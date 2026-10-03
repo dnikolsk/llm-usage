@@ -1,12 +1,12 @@
 # Subscription coding tasks and MCP
 
-The usage API remains compatible. Execution is an additional authenticated service: a durable PostgreSQL queue, staged planner, per-account workers, and a Streamable HTTP MCP endpoint at `/mcp`. The service never stores provider credentials. Provider login code belongs under `collector/src/providers/<provider>`.
+The usage API remains compatible. Execution is an additional authenticated service: a durable PostgreSQL queue, staged planner, per-account workers, and a Streamable HTTP MCP endpoint at `/mcp`. The service stores encrypted provider grants and reads usage itself. Enrollment, refresh and telemetry belong in `packages/providers`; CLI execution belongs in `collector/src/providers/<provider>`.
 
-For a first installation, start with [Getting started](getting-started.md). This page is the detailed runtime and API reference; [deployment](deployment.md) covers credential placement and ongoing operations.
+For a first installation, start with [Deploy your own](deploy-your-own.md). This page is the detailed runtime and API reference; [deployment](deployment.md) covers credential placement and ongoing operations.
 
 ## Prepared personal accounts
 
-`config/worker.personal.example.json` registers Codex personal (`chatgpt-personal`), Claude personal (`claude-personal`), Cursor personal (`cursor-personal`) and, when a `gemini` tool is configured, Gemini (`google-ai-pro-personal`). An account ID names one real provider account across the whole system: the worker's `account_id` must be the same ID that is connected at `/connect`, so reuse an existing ID rather than inventing a variant (a second ID for the same login would need a second sign-in and would show the same quota twice). Registration does not claim successful sign-in or available subscription billing; an account that was registered by mistake can be removed from `/connect` while it has no session, targets or jobs.
+`config/worker.personal.example.json` illustrates Codex personal (`chatgpt-personal`), Claude personal (`claude-personal`), Cursor personal (`cursor-personal`); the worker generator also adds Gemini (`google-ai-pro-personal`) when a `gemini` tool is configured. An account ID names one real provider account across the whole system: the worker's `account_id` must be the same ID that is connected at `/connect`, so reuse an existing ID rather than inventing a variant (a second ID for the same login would need a second sign-in and would show the same quota twice). Registration does not claim successful sign-in or available subscription billing; an account that was registered by mistake can be removed from `/connect` while it has no session, targets or jobs.
 
 Install the official clients manually or use the optional [machine setup pack](https://github.com/dnikolsk/ai-builder-tools/tree/feat/cloud-subscription-workers/machine). Configure repository paths and persistent account/artifact directories in a private worker JSON file. Never put tokens or OAuth material in it. The example contains placeholder paths and a `my-project` repository key; replace every path before use. The worker clones each local task into its own directory; it does not create Git worktrees or modify the source checkout. Only committed source is cloned. Provider-cloud execution operates on the provider's configured repository/branch, not local uncommitted files.
 
@@ -37,7 +37,21 @@ For stale or rejected tokens, open `/connect` and choose **Sign in again** for t
 
 ## Step-by-step decision
 
-`POST /v1/execution/plan` (JOB_TOKEN) accepts `repository`, optional `provider` (`anthropic`, `openai`, `cursor`), `account_id`, `execution` (`auto`, `local`, `cloud`), `scope`, `model_class`, `estimated_minutes`, and `continue_job_id`.
+```mermaid
+flowchart TD
+  Request[Task and explicit choices] --> Live[Refresh provider usage]
+  Live --> Eligible[Filter billing, health, repo, model and quota]
+  Eligible --> Continue[Prefer eligible continuation]
+  Continue --> Ready[Prefer prepared environment]
+  Ready --> Evidence[Prefer measured quota]
+  Evidence --> Capacity[Compare remaining capacity after reserves]
+  Capacity --> Reset[Compare time until limiting resets]
+  Reset --> Setup[Prefer least setup time]
+  Setup --> Plan[Return target and reasons]
+```
+
+
+`POST /v1/execution/plan` (JOB_TOKEN) accepts `repository`, optional `provider` (`anthropic`, `openai`, `cursor`, `google`), `account_id`, `execution` (`auto`, `local`, `cloud`), `scope`, `model_class`, `estimated_minutes`, and `continue_job_id`.
 
 1. Honor explicit choices, personal/work scope, repository/model availability, fresh worker/login health, cooldowns, account locks, confirmed subscription billing, and known quota exhaustion/reserves.
 2. Prefer the existing eligible provider/account/environment for a verified continuation. If it cannot resume, require an explicit handoff instead of silently dropping prior work.
@@ -53,7 +67,7 @@ Usage is read by the service, live, from the provider sessions connected at `/co
 
 Every dashboard render, `/v1/status` call and MCP `list_accounts`/`plan_task` call observes each connected account at that moment; readings less than 20 seconds old are shared rather than repeated, which keeps bursts within provider rate limits. A session whose access token is within two minutes of expiry is refreshed first, in the service only. Failed reads record an error observation with a safe diagnostic (`usage_auth_required`, `usage_rate_limited`, `usage_schema_unrecognized`, …), keep the last successful reading visible for inspection, and prevent it from being called measured capacity. A rejected refresh marks the session **Sign in again** on `/connect`. Known exhaustion remains binding until reset. `list_accounts` includes normalized usage, observed/reset times, freshness, the diagnostic and the per-account observation outcome; `plan_task` includes source, confidence and observation time for each applicable bucket. Model scopes are matched to the concrete execution model as described below; the common allowance always applies.
 
-For live acceptance, connect all three providers at `/connect`, then call `GET /v1/status` with `READ_TOKEN` (or MCP `list_accounts`) and compare each account's percentage and UTC reset to its provider usage screen. Require real readings for all three before calling the deployment verified. `usage_auth_required` means the session needs a new sign-in; `usage_rate_limited` means wait; schema diagnostics require adapter investigation. Fixture tests claim no live provider acceptance.
+For live acceptance, connect each requested provider at `/connect`, then call `GET /v1/status` with `READ_TOKEN` (or MCP `list_accounts`) and compare each account's percentage and UTC reset to its provider usage screen. Require real readings for every requested provider before calling the deployment verified. `usage_auth_required` means the session needs a new sign-in; `usage_rate_limited` means wait; schema diagnostics require adapter investigation. Fixture tests claim no live provider acceptance.
 
 `model_class` is a configured routing label. Local targets map it to a concrete provider model using `models` in worker configuration; it is passed to the CLI. Don't register a model class that the target cannot execute. General provider selection works without a model class.
 
@@ -89,7 +103,7 @@ Expired leases and ambiguous CLI outcomes become `needs_review`, retaining the a
 
 Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build`. With a test-capable PostgreSQL role and DATABASE_URL, run `RUN_DB_INTEGRATION=1 pnpm --filter @llm-usage/web exec vitest run tests/execution-db.test.ts`; it creates and drops its own isolated schema. Tests cover routing/reset semantics, MCP SDK calls and HTTP initialization, scoped credentials, atomic/idempotent queue behavior, leases/recovery, provider response parsing, and the phone code handoff. Fake CLI fixtures do not establish that real subscriptions are authenticated.
 
-The final live acceptance test still requires owner sign-in: with the Mac powered off, connect from a phone, submit a coding task, receive changes, restart the worker, and repeat. See [deployment](deployment.md) for supervision, Tailscale and 1Password options.
+The final live acceptance test still requires owner sign-in: for a Linux cloud worker, with personal laptops offline, connect from a phone, submit a coding task, receive changes, restart the worker, and repeat. See [deployment](deployment.md) for supervision, Tailscale and 1Password options.
 
 ### Deployed subscription verification
 
@@ -117,7 +131,7 @@ Worker target configuration accepts `default_model`, and its existing `models` m
 
 The worker passes the planned model to the CLI and rejects configuration drift rather than substituting another model. Cursor continuations retain their previous model/pool; a missing historical model binding or a requested change requires explicit handoff. Restarting does not silently switch an exhausted named-model session to Auto.
 
-When Cursor's `includedSpend / limit` differs from its reported percentage by over two percentage points, the included bucket carries `usage_amount_percentage_conflict`. The collector omits the contradictory monetary fields, preserves the reported percentage, and the planner exposes the warning. This is a reported inconsistency, not an inferred dollar balance.
+When Cursor's `includedSpend / limit` differs from its reported percentage by over two percentage points, the included bucket carries `usage_amount_percentage_conflict`. The service-side provider reader omits the contradictory monetary fields, preserves the reported percentage, and the planner exposes the warning. This is a reported inconsistency, not an inferred dollar balance.
 
 Deploy while idle: stop the worker, pull, rebuild, restart the web service, and re-register with the existing private worker config (`pnpm --filter @llm-usage/collector register /absolute/path/worker.json`, using the existing ADMIN_TOKEN), then start the single worker. Refresh usage. Verify `plan_task` for Cursor with no model class shows `model: auto`, `quota_scope: cursor_auto`, and both applicable buckets; a configured named-model request must be excluded while its pool is exhausted. Run one Auto smoke task and inspect the claimed job's model and patch. Existing sign-ins need no change.
 
@@ -150,7 +164,7 @@ The installer provides a version-1 JSON manifest with `providers` entries named 
 
 Each main dashboard bucket shows its reported reset date/time in Eastern Time as well as its countdown. A missing Anthropic five-hour reset remains “Reset not reported”; the service never substitutes the weekly reset or invents a new rolling window.
 
-Paid telemetry is stored separately in snapshot `metadata.paid_usage` and exposed as account `paid_usage` by status/MCP. It is display-only and never enters routing buckets. Claude extra usage shows `monthly_limit` / `used_credits` as a dollar spending budget; Cursor shows the individual on-demand spend limit, spend and reported remainder. These are spending ceilings, not prepaid token inventories. Codex shows its app-server credit balance in provider credits, without inventing a dollar/token conversion. Separate Anthropic/OpenAI API-account balances are outside this view.
+Paid telemetry is stored separately in snapshot `metadata.paid_usage` and exposed as account `paid_usage` by status/MCP. It is display-only and never enters routing buckets. Claude extra usage shows `monthly_limit` / `used_credits` as a dollar spending budget; Cursor shows the individual on-demand spend limit, spend and reported remainder. These are spending ceilings, not prepaid token inventories. Codex shows the ChatGPT backend usage endpoint’s credit balance in provider credits, without inventing a dollar/token conversion. Separate Anthropic/OpenAI API-account balances are outside this view.
 
 Provider-unreported amounts remain unknown, not zero. Malformed optional paid telemetry produces `paid_usage_schema_unrecognized` without discarding valid included quota. Failed/stale observations and passed paid-period resets are shown as needing refresh, with last values identified as historical. No paid fallback or additional spending authorization is added.
 
@@ -158,4 +172,4 @@ Compare paid values and reset dates against each provider's usage screen before 
 
 ### Several dashboards or a private control host
 
-Usage no longer travels between deployments: each web deployment reads the providers itself from the sessions connected to it. If MCP/control runs on a private host and a public dashboard runs on Vercel, connect the providers on each (two separate grants, each revocable), or point both at one database. Retire any remaining scheduled publisher (cron, launchd, `usage:sync` loops): `/v1/ingest` and `worker/usage` answer `410`, so they can no longer overwrite live readings with stale ones.
+Usage no longer travels between deployments: each web deployment reads the providers itself from the sessions connected to it. If MCP/control runs on a private host and a public dashboard runs on Vercel, connect the providers on each (two separate grants, each revocable), or point both at one database with the same `LLM_SESSION_KEY` and compatible role bindings. Shared instances share accounts, grants and jobs; do not use a production database for previews. Retire any remaining scheduled publisher (cron, launchd, `usage:sync` loops): `/v1/ingest` and `worker/usage` answer `410`, so they can no longer overwrite live readings with stale ones.

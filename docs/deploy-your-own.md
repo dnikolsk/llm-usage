@@ -1,84 +1,152 @@
 # Deploy your own
 
-Use your own GitHub copy, Vercel project, PostgreSQL database and provider subscriptions. Your dashboard receives its own `*.vercel.app` address. A persistent Mac/Linux worker runs the coding CLIs; the Vercel project hosts the dashboard, API and MCP endpoint.
+Deploy your own password-protected dashboard and MCP service at a new `*.vercel.app` address. You own the GitHub fork, database, hosting secrets and connected subscriptions. This is a single-owner application; other people should deploy their own copy.
 
-An agent can perform the steps below. Ask it:
+**Start with the dashboard (steps 1–5). Add a worker only when you want coding tasks (steps 6–7).** Usage monitoring does not require an unlocked Mac, Tailscale, 1Password or a running worker.
 
-> Read AGENTS.md and docs/deploy-your-own.md, then set up my own instance. Reuse my existing authorization and ask me only for missing functional choices or account approvals. Store secrets through protected settings, never display them in chat. When it is time to connect providers, send me to my dashboard's /connect page; do not sign in to providers yourself. Verify live quota and a small patch-producing task, then verify an idle restart. Tell me which steps are verified and which still need my action.
+```mermaid
+flowchart TD
+  Fork[Fork and clone] --> Secrets[Create database and private role files]
+  Secrets --> Deploy[Migrate and deploy to Vercel]
+  Deploy --> Login[Sign into your dashboard]
+  Login --> Connect[Add accounts and connect providers]
+  Connect --> Usage[Verify usage and reset dates]
+  Usage --> Worker[Optional: register a persistent CLI worker]
+  Worker --> MCP[Connect your bot through MCP]
+  MCP --> Test[Review a test patch and verify restart]
+```
 
-Already running an older instance? Follow the upgrade runbook in [AGENTS.md](../AGENTS.md#upgrade-an-existing-instance-to-live-provider-sessions) instead.
+## Before you start
 
-## 1. Create your hosting resources
+| You need | Used for |
+| --- | --- |
+| GitHub and Vercel accounts | Your fork and hosted service; hosting charges follow your plans |
+| Empty PostgreSQL database, such as Neon | Accounts, encrypted provider grants, usage and jobs; PostgreSQL 17 is validated |
+| A setup machine with Git, Node.js 22 and pnpm 11.19.0 | Install dependencies, generate secrets and run migrations |
+| Your Claude, ChatGPT/Codex, Cursor and/or Gemini accounts | Approve each provider from your own browser, including on a phone |
+| Optional persistent Mac/Linux host | Run official coding CLIs and accept jobs; Vercel cannot host this process |
 
-[Fork this repository](https://github.com/dnikolsk/llm-usage/fork) into your GitHub account. Open [Vercel's new project page](https://vercel.com/new), authorize your GitHub connection and import your fork. Select Next.js and set **Root Directory → `apps/web`**. Use the repository's pnpm workspace and lockfile; allow workspace files outside the root when needed.
+An agent can do the setup. Give it this prompt:
 
-Create an empty PostgreSQL database through your chosen provider (for example Neon through Vercel's marketplace) and obtain its connection URI through protected settings. Keep previews separate from production. Retain the release checkout locally/on the agent machine for migration and setup commands.
+> Read AGENTS.md and docs/deploy-your-own.md. Set up my own hosted instance using my own resources and existing authorization. Generate and bind secrets securely; never print them in chat. Deploy and verify dashboard access, then send me to my dashboard’s /connect to approve my provider accounts. For coding tasks, prepare a persistent worker and MCP connection, verify a reviewed patch, and repeat after an idle restart. Report what is verified and what needs my action. Do not reuse the original author's hosting or accounts.
 
-This is a guided import, not automatic resource provisioning: GitHub/Vercel sign-in, database access and any hosting charges are controlled by the owner. Provider sign-in is a later step.
+The owner approves hosting access and provider sign-in. The agent handles configuration, migrations, deployment, registration and checks within the authorized scope. Already running an older release? Use the [upgrade runbook](../AGENTS.md#upgrade-an-existing-instance-to-live-provider-sessions).
 
-## 2. Generate private configuration
+## 1. Fork, clone and install
 
-Install Node 22 and pnpm 11.19.0, then from your checkout:
+Install [Node.js 22](https://nodejs.org/en/download) if needed, then install the pinned package manager with `npm install --global pnpm@11.19.0` (or use your existing version manager).
+
+[Fork this repository](https://github.com/dnikolsk/llm-usage/fork), then replace `YOUR_GITHUB_NAME` below:
 
 ```sh
+git clone https://github.com/YOUR_GITHUB_NAME/llm-usage.git
+cd llm-usage
+node --version
+pnpm --version
 pnpm install --frozen-lockfile
+```
+
+Expect Node 22 and pnpm 11.19.0. Install these versions before continuing if they are missing. Run subsequent commands from this repository root. Use Bash or Zsh. Placeholder paths and URLs must be replaced with your own.
+
+## 2. Create the database and private configuration
+
+Create an empty PostgreSQL database with your hosting provider. Obtain its connection URI from protected settings; do not paste it in chat. Preview deployments must have separate databases and secrets.
+
+```sh
 pnpm setup:init --directory "$HOME/.llm-usage-owner" --worker-id worker-1
 ```
 
-If `DATABASE_URL` is already securely injected, it is included in the relevant files. Otherwise the command reports `database_configured: false`: bind your database URI to `DATABASE_URL` in both the web and operator role files using a trusted local editor/secret-management tool before migrations. The files use JSON, so punctuation in secret values is not interpreted as shell code. Do not paste their contents into chat.
+This creates a new mode-700 directory with mode-600 JSON files. It generates independent role secrets and the 64-hex `LLM_SESSION_KEY`, reuses valid injected bindings, and refuses to overwrite existing setup files. It does not provision resources or deploy anything.
 
-The command creates a new private directory, mode 700, with mode-600 files. It reuses valid independent role secrets already injected into its environment, generates missing secrets, and refuses to overwrite an existing directory. It prints only directory/worker metadata. Treat these files as a local bootstrap bundle; a password manager or host secret store can hold the live bindings afterward.
+If `DATABASE_URL` was securely injected into the setup process, it is included. Otherwise the helper reports `database_configured: false`. Using a trusted local editor or secret-management tool, add `DATABASE_URL` inside the `variables` object of **both** `web-secrets.json` and `operator-secrets.json`. Use the provider's full PostgreSQL URI and TLS settings. `setup.json` records the initial generation state; successful migration is the actual database check.
 
-| File | Process allowed to receive its values |
+| File | Who receives it |
 | --- | --- |
-| `web-secrets.json` | Vercel/Next.js service: database, `LLM_SESSION_KEY` (encrypts stored provider logins) and all server-side role bindings |
-| `worker-secrets.json` | This worker only: its machine-specific token |
-| `client-secrets.json` | Bot/MCP client: job and usage-read tokens |
-| `operator-secrets.json` | Temporary migration/registration session: database and admin token |
-| `setup.json` | Nonsecret machine ID, role-file names and setup metadata |
+| `web-secrets.json` | Hosted service: database, encryption key and role bindings |
+| `operator-secrets.json` | Temporary migration/registration process: database and admin token |
+| `worker-secrets.json` | This worker: only its machine-specific token |
+| `client-secrets.json` | Bot/client: job and read tokens |
+| `setup.json` | Nonsecret setup metadata |
 
+Keep the bundle outside Git and back it up securely. Losing or replacing `LLM_SESSION_KEY` makes existing provider grants unreadable and requires reconnecting the accounts. 1Password or another secret store is optional; see [credential placement](deployment.md#configuration-and-credential-placement).
 
-## 3. Deploy your page
+**Checkpoint:** the private files exist, and web/operator roles have the same destination `DATABASE_URL`. Do not print their values to check this.
 
-Through your authorized Vercel tool or project environment settings, bind the keys in `web-secrets.json`'s `variables` object to server-side variables. Keep values out of tool output/chat and do not use `NEXT_PUBLIC_*` names. `DATABASE_URL`, `LLM_SESSION_KEY`, `DASHBOARD_PASSWORD`, independent role tokens and `WORKER_WORKER_1_TOKEN` must have your own values. Back up `LLM_SESSION_KEY` with the rest of the bundle: if it is lost or rotated, every provider must be connected again.
+## 3. Configure Vercel and migrate
 
-Run migrations with only the operator role:
+Open [Vercel's import page](https://vercel.com/new) and import your fork:
+
+| Vercel setting | Value |
+| --- | --- |
+| Framework | Next.js |
+| Root Directory | `apps/web` |
+| Node.js | 22.x |
+| Install/build | Use the repository's pnpm workspace/lockfile and Next.js defaults |
+| Files outside Root Directory | Allow workspace dependencies when the setting is shown |
+| Production environment variables | Bind the keys from `web-secrets.json` → `variables` |
+
+Through authorized hosting tools or Vercel's protected settings, enter each variable separately; do not upload the entire JSON as one variable. Do not use `NEXT_PUBLIC_*`. The web role includes `DATABASE_URL`, `LLM_SESSION_KEY`, `DASHBOARD_PASSWORD`, `READ_TOKEN`, `WRITE_TOKEN`, `JOB_TOKEN`, `ADMIN_TOKEN` and `WORKER_WORKER_1_TOKEN`. `WRITE_TOKEN` is retained for the local demo; real usage is collected by the service.
+
+Before validating deployment, run all migrations against your destination database:
 
 ```sh
 pnpm setup:run --file "$HOME/.llm-usage-owner/operator-secrets.json" -- pnpm db:migrate
 ```
 
-Then deploy the Vercel project, or redeploy after changing its environment. Visit its assigned HTTPS URL and sign in with your generated dashboard password from your local secret store. An empty account list is expected before worker registration. No demo seed is needed.
+Expect `Migration applied`. Do **not** seed demo accounts into production. The role wrapper supplies only the selected role plus basic OS/network settings; unrelated inherited credentials are excluded. It is not a security sandbox.
 
-The wrapper takes variables from the selected role file and basic OS/network settings; unrelated inherited API, admin and vault credentials are excluded. It does not establish a sandbox or authorize arbitrary commands. Use it only with trusted setup commands.
+## 4. Deploy and sign in
 
-## 4. Connect your worker and accounts
+Deploy the Vercel project. Redeploy whenever its environment variables change. Open the assigned HTTPS URL and sign in with your generated `DASHBOARD_PASSWORD`, retrieved privately from your secret store.
 
-Follow [Connect a real worker](getting-started.md#connect-a-real-worker) to install CLIs, create a tools manifest, and generate the execution config. Use your Vercel HTTPS origin, `--worker-id worker-1`, and repository keys/paths you actually own. The provider defaults are personal Claude, Codex and Cursor; remove unrequested targets before registration.
+**Checkpoint:** the password-protected dashboard loads. An empty account list is expected. A successful build alone does not prove database or provider access. For deployment errors, see [troubleshooting](troubleshooting.md) and [other Node hosting](deployment.md#other-node-hosts).
 
-Register the accounts and targets from the checkout; this creates the account rows that `/connect` lists:
+## 5. Add and connect your accounts
+
+Open `/connect` on your new dashboard. Expand **Add an account**. Choose each provider, a label and personal/work scope. Use these IDs if you want the worker generator's defaults later:
+
+| Account | Provider selection | Suggested account ID | What you do after opening sign-in |
+| --- | --- | --- | --- |
+| Claude | Claude | `claude-personal` | Approve and paste the displayed code back into `/connect` |
+| ChatGPT | Codex | `chatgpt-personal` | Approve and copy the full localhost redirect address from the address bar back into `/connect`; that address may not load a page |
+| Cursor | Cursor | `cursor-personal` | Approve, then return and choose **I signed in — continue** |
+| Google | Gemini | `google-ai-pro-personal` | Follow the page instructions and paste the displayed code |
+
+Complete one account at a time in the same browser before the ten-minute attempt expires. Paste codes/redirect URLs only into your dashboard, never into chat. No browser on the worker machine is needed. Subscription sign-in does not use Anthropic/OpenAI/Cursor API keys.
+
+An account should say **Connected** on `/connect` and **Live** on the dashboard. The service stores the encrypted grant, refreshes it when needed and reads usage on dashboard/API/MCP requests. Readings within 20 seconds are shared. No usage cron job is needed.
+
+**Checkpoint:** compare each requested account's usage with its provider's own screen. Expand all windows to check resets. UI dates are Eastern Time; API dates are UTC. A null reset or paid amount can be valid: [interpret the fields](providers.md#what-the-dashboard-numbers-mean). A Live badge indicates a connected session, so also check observation timestamps and diagnostics. You now have a hosted usage dashboard; stop here if that is all you need.
+
+## 6. Add a coding worker
+
+On a persistent Mac/Linux host, follow [Connect a real worker](getting-started.md#connect-a-real-worker) to install official CLIs, prepare repository checkouts and create `worker.json`. Use your Vercel HTTPS origin and `worker-1`. For a first installation with only one provider, copying and trimming the example config is simpler than the generator, which requires paths for Claude, Codex and Cursor.
+
+Keep the `account_id` values exactly equal to those you connected in step 5. One real login gets one stable account ID across all workers. Each worker gets a distinct worker ID and token. Confirm provider included allowance and overage settings before changing a target's `billing` from `unknown` to `subscription`.
+
+From a trusted checkout with access to the config, register using the operator role:
 
 ```sh
 pnpm setup:run --file "$HOME/.llm-usage-owner/operator-secrets.json" -- \
   pnpm --filter @llm-usage/collector register /absolute/path/worker-state/worker.json
 ```
 
-Sign in to your dashboard and open `/connect`. Connect each account: the page starts the provider's own sign-in in your browser; you approve it and paste back what the provider shows (Claude shows a code; Codex lands on a `localhost` address you copy from the address bar; Cursor needs nothing, just continue). The login is stored in your service, sealed with `LLM_SESSION_KEY`, and each card turns **Live**. This is subscription authentication: it does not require Anthropic/OpenAI/Cursor API keys, and the worker never logs in itself. Verify included billing/overage settings before marking targets `subscription`, then re-register.
-
-Start the worker with only its own token:
+Start the worker on its host with only its worker role:
 
 ```sh
-pnpm setup:run --file "$HOME/.llm-usage-owner/worker-secrets.json" -- \
+pnpm setup:run --file /absolute/private/path/worker-secrets.json -- \
   pnpm --filter @llm-usage/collector worker /absolute/path/worker-state/worker.json
 ```
 
-It fetches short-lived access tokens from your service before each check and task and writes them into the configured `auth_dir`s; an account that is not connected at `/connect` shows as `needs_login`.
+Transfer/bind only that worker's token to a remote host, not the entire owner bundle. The worker fetches access tokens from the service and writes CLI credential files; do not run separate CLI logins for this managed worker. Run exactly one process per worker ID under your host supervisor. The optional [machine setup pack](https://github.com/dnikolsk/ai-builder-tools/tree/feat/cloud-subscription-workers/machine) supplies supervision helpers; [manual setup](getting-started.md#connect-a-real-worker) works independently.
 
-The last command is a foreground process. Run it under your host supervisor for persistence, keeping exactly one active process. If service and worker are on different machines, bind only the worker token through that host's protected secret settings; do not transfer the entire owner bundle. The optional setup pack supports 1Password-backed startup; it needs an authorized desktop integration or a scoped cloud service account when your plan supports it.
+Tailscale is optional for SSH/private networking. A worker can poll a public authenticated Vercel service over outbound HTTPS without an inbound port. 1Password can supply the worker token, but needs host authorization itself; neither tool replaces the provider connection flow.
 
-## 5. Verify and connect your agent
+**Checkpoint:** connected accounts show **Worker online**, and execution plans select an eligible target for your repository. A cloud VM running a CLI is `execution: local`; `execution: cloud` means a provider-hosted environment, currently implemented only for configured Codex targets.
 
-With a worker running, use a second terminal/client environment. Substitute your registered repository key for `my-project`:
+## 7. Verify a task and connect your bot
+
+From a client environment with access to the nonsecret worker config, replace `my-project` with its registered repository key:
 
 ```sh
 pnpm setup:run --file "$HOME/.llm-usage-owner/client-secrets.json" -- \
@@ -86,14 +154,17 @@ pnpm setup:run --file "$HOME/.llm-usage-owner/client-secrets.json" -- \
   /absolute/private/path/first-check --repository my-project
 ```
 
-This only reads accounts/plans. When an eligible target is available, repeat with `--run` to consume subscription allowance and create a small test file in an isolated task clone. It saves the job and patch for review; it does not commit/push/deploy. Keep the same output directory to resume an interrupted check. Restart the idle supervised worker, then use a new output directory with `--run` to verify a second task without re-login.
+This plans without submitting a coding task; it can refresh live usage. Inspect exclusions if no target is eligible. Repeat with `--run` to consume subscription allowance and create a small test file in an isolated clone. Review the returned patch. Use the same output directory to resume an interrupted attempt; use a **new** output directory after an idle worker restart to verify a second task without re-login. The helper tests automatic execution and plans explicit Claude/Codex/Cursor routes; it does not prove every provider executes. For that, [submit a small explicit-provider task](getting-started.md#submit-your-first-task) for each requested provider.
 
-Finally configure your bot/agent's authenticated Streamable HTTP MCP connection:
+Configure a bearer-header-compatible Streamable HTTP MCP client:
 
-- URL: `https://YOUR_VERCEL_PROJECT.vercel.app/mcp`
-- Header: `Authorization: Bearer <your JOB_TOKEN>`, supplied through its secret settings
-- Tools: `list_accounts`, `plan_task`, `submit_task`, `get_task`, `cancel_task`
+| Setting | Value |
+| --- | --- |
+| URL | `https://YOUR_VERCEL_PROJECT.vercel.app/mcp` |
+| Authorization header | `Bearer <your JOB_TOKEN>`, inserted through client secret settings |
+| First tools | `list_accounts`, then `plan_task` |
+| Execution tools | `submit_task`, `get_task`, `cancel_task` |
 
-The dashboard login password is separate from MCP authentication. Clients requiring OAuth discovery need an authenticated gateway; see [MCP reference](execution.md#mcp-and-rest). For browser clients, configure exact `MCP_ALLOWED_ORIGINS` on the service when required.
+The dashboard password does not authenticate MCP. OAuth discovery is not implemented. For browser clients, configure the exact `MCP_ALLOWED_ORIGINS` if needed; see [MCP reference](execution.md#mcp-and-rest).
 
-Report success only after dashboard access, live quota that matches each provider's own usage screen, a reviewed task patch and an idle-restart check pass. See [operations and troubleshooting](deployment.md) for recovery, upgrades and credential rotation.
+**Done when:** your dashboard works, each requested provider's live data is checked, a task returns the expected patch, and a new task succeeds after an idle worker restart. Builds, account registration and a connected badge alone do not prove task readiness. Keep the deployment URL, release commit, worker ID and verification results in your private operations notes; keep secrets out of the report.
