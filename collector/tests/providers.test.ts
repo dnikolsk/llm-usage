@@ -1,5 +1,4 @@
 import {describe,it,expect} from 'vitest';
-import {normalizeUsage} from '../src/providers/codex/usage';
 import * as codex from '../src/providers/codex/index';
 import * as claude from '../src/providers/claude/index';
 import * as cursor from '../src/providers/cursor/index';
@@ -56,40 +55,9 @@ describe('official CLI boundaries',()=>{
   expect(env.ANTHROPIC_API_KEY).toBeUndefined();expect(env.CLAUDE_CONFIG_DIR).toBe('/tmp/test-auth');
   delete process.env.ANTHROPIC_API_KEY;
  });
- it('normalizes official percentage and epoch reset without changing its meaning',()=>{
-  const result=normalizeUsage({ordinaryUsageAllowed:true,rateLimits:{primary:{usedPercent:35,windowDurationMins:300,resetsAt:1790863200},secondary:null}},'codex-personal',new Date('2026-10-01T12:00:00Z'));
-  expect(result.snapshot.limits[0].remaining_fraction).toBe(.65);
-  expect(result.snapshot.limits[0].reset_at).toBe(new Date(1790863200000).toISOString());
-  expect(result.snapshot.limits[0].kind).toBe('session');
- });
- it('retains all metered buckets and never uses paid credit balance as quota',()=>{
-  const window={usedPercent:90,windowDurationMins:10080,resetsAt:null};
-  const result=normalizeUsage({ordinaryUsageAllowed:false,rateLimits:{primary:null,secondary:null},rateLimitsByLimitId:{codex:{primary:window,secondary:null},model:{normalModelSlug:'special',primary:window,secondary:null}}},'codex-personal');
-  expect(result.allowed).toBe(false);expect(result.snapshot.limits).toHaveLength(2);expect(result.snapshot.limits[1].scope).toBe('special');
- });
- it('rejects invalid percentages instead of hiding a protocol change',()=>{
-  expect(()=>normalizeUsage({rateLimits:{primary:{usedPercent:140,windowDurationMins:300,resetsAt:null},secondary:null}},'codex-personal')).toThrow();
- });
  it('recognizes cloud task URLs and terminal states without executing them',()=>{
   expect(codex.cloudTaskUrl('https://chatgpt.com/codex/tasks/task_123')).toContain('task_123');
   expect(codex.cloudTaskUrl('https://evil.example/task_123')).toBeUndefined();
   expect(codex.cloudState('[READY] A task')).toBe('ready');expect(codex.cloudState('some failure')).toBe('unknown');
  });
-});
-
-it('shows Codex paid credits without replenishing exhausted subscription quota',()=>{
- const credits={hasCredits:true,unlimited:false,balance:'125.5'};
- const window={usedPercent:100,windowDurationMins:300,resetsAt:null};
- const result=normalizeUsage({ordinaryUsageAllowed:false,rateLimits:{primary:window,secondary:null,credits},rateLimitsByLimitId:{codex:{primary:window,secondary:null,credits},other:{primary:null,secondary:null,credits}}},'codex-personal');
- expect(result.snapshot.metadata.paid_usage).toHaveLength(1);
- expect(result.snapshot.metadata.paid_usage?.[0]).toMatchObject({kind:'balance',unit:'credits',remaining:125.5});
- expect(result.allowed).toBe(false);expect(result.snapshot.limits[0].remaining_fraction).toBe(0);
- const bad=normalizeUsage({rateLimits:{primary:window,secondary:null,credits:{hasCredits:true,unlimited:false,balance:'not-a-balance'}}},'codex-personal');
- expect(bad.snapshot.limits[0].remaining_fraction).toBe(0);expect(bad.snapshot.metadata.paid_usage_diagnostic).toBe('paid_usage_schema_unrecognized');
-});
-
-it('keeps Codex wallet credits when per-model limits omit the wallet',()=>{
- const window={usedPercent:25,windowDurationMins:300,resetsAt:null};
- const result=normalizeUsage({rateLimits:{primary:window,secondary:null,credits:{hasCredits:true,unlimited:false,balance:'50'}},rateLimitsByLimitId:{codex:{primary:window,secondary:null}}},'codex-personal');
- expect(result.snapshot.metadata.paid_usage?.[0].remaining).toBe(50);expect(result.snapshot.limits).toHaveLength(1);
 });

@@ -3,6 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {connectSql} from '@llm-usage/db';
 import {jobRequest,ingestSnapshot} from '@llm-usage/core';
 import * as store from '../src/execution-store';
+import {ingest} from '../src/store';
 const enabled=process.env.RUN_DB_INTEGRATION==='1';
 const schema=`execution_test_${process.pid}`;
 const original=process.env.DATABASE_URL;
@@ -12,7 +13,7 @@ describe.skipIf(!enabled)('PostgreSQL execution lifecycle',()=>{
   sql=connectSql();await sql.unsafe(`CREATE SCHEMA ${schema}`);
   const url=new URL(original!);url.searchParams.set('search_path',schema);process.env.DATABASE_URL=url.toString();
   const test=connectSql();try{
-   for(const name of ['0001_initial.sql','0002_execution.sql'])await test.unsafe(await readFile(new URL(`../../../packages/db/migrations/${name}`,import.meta.url),'utf8'));
+   for(const name of ['0001_initial.sql','0002_execution.sql','0003_provider_sessions.sql'])await test.unsafe(await readFile(new URL(`../../../packages/db/migrations/${name}`,import.meta.url),'utf8'));
   }finally{await test.end();}
  });
  afterAll(async()=>{process.env.DATABASE_URL=original;await sql.unsafe(`DROP SCHEMA ${schema} CASCADE`);await sql.end();});
@@ -55,16 +56,16 @@ describe.skipIf(!enabled)('PostgreSQL execution lifecycle',()=>{
   await store.registerTarget({id:'quota-local',account_id:'quota-personal',worker_id:'quota-worker',mode:'local',repositories:['quota-repo'],model_classes:[],setup_minutes:0,billing:'subscription'});
   await store.reportHealth('quota-worker',{target_id:'quota-local',health:'ready',cooldown_until:null});
   const observed=new Date().toISOString();
-  await store.reportUsage('quota-worker',ingestSnapshot.parse({account_id:'quota-personal',provider:'anthropic',observed_at:observed,status:'ok',metadata:{paid_usage:[{id:'extra',label:'Extra usage budget',kind:'spending_limit',unit:'usd_cents',remaining:9000,used:1000,limit:10000,enabled:true,observed_at:observed}]},limits:[{
+  await ingest(ingestSnapshot.parse({account_id:'quota-personal',provider:'anthropic',observed_at:observed,status:'ok',metadata:{paid_usage:[{id:'extra',label:'Extra usage budget',kind:'spending_limit',unit:'usd_cents',remaining:9000,used:1000,limit:10000,enabled:true,observed_at:observed}]},limits:[{
    id:'five_hour',account_id:'quota-personal',kind:'session',scope:'all_models',unit:'fraction',observed_at:observed,
    remaining_fraction:.8,used_fraction:.2,reset_at:new Date(Date.now()+3600000).toISOString(),source:'local_collector',confidence:'provider_reported'
-  }]}));
+  }]}),'db-fixture-key-1');
   const listed=(await store.listExecutionAccounts()).accounts.find(a=>a.id==='quota-personal');
   expect(listed?.usage?.limits[0].remaining_fraction).toBe(.8);
   expect(listed?.usage?.paid_usage?.[0]).toMatchObject({remaining:9000,used:1000,limit:10000});
   const request=jobRequest.parse({repository:'quota-repo',prompt:'Fixture'});
   expect((await store.planTask(request)).selected?.usage).toBe('measured');
-  await store.reportUsage('quota-worker',ingestSnapshot.parse({account_id:'quota-personal',provider:'anthropic',observed_at:new Date(Date.now()+1).toISOString(),status:'error',limits:[],metadata:{diagnostic_code:'usage_auth_required'}}));
+  await ingest(ingestSnapshot.parse({account_id:'quota-personal',provider:'anthropic',observed_at:new Date(Date.now()+1).toISOString(),status:'error',limits:[],metadata:{diagnostic_code:'usage_auth_required'}}),'db-fixture-key-3');
   const failed=(await store.listExecutionAccounts()).accounts.find(a=>a.id==='quota-personal');
   expect(failed?.usage?.usage_diagnostic).toBe('usage_auth_required');
   expect(failed?.usage?.paid_usage?.[0].remaining).toBe(9000);
@@ -76,9 +77,9 @@ describe.skipIf(!enabled)('PostgreSQL execution lifecycle',()=>{
   await store.registerTarget({id:'pool-local',account_id:'pool-personal',worker_id:'pool-worker',mode:'local',repositories:['pool-repo'],model_classes:['reasoning'],models:{reasoning:'sonnet-4'},setup_minutes:0,billing:'subscription'});
   await store.reportHealth('pool-worker',{target_id:'pool-local',health:'ready',cooldown_until:null});
   const observed=new Date().toISOString();
-  await store.reportUsage('pool-worker',ingestSnapshot.parse({account_id:'pool-personal',provider:'cursor',observed_at:observed,status:'ok',limits:
+  await ingest(ingestSnapshot.parse({account_id:'pool-personal',provider:'cursor',observed_at:observed,status:'ok',limits:
    [['all_models',.915],['cursor_auto',.999],['cursor_api',0]].map(([scope,remaining])=>({id:String(scope),account_id:'pool-personal',kind:'subscription',scope,unit:'fraction',observed_at:observed,
-    remaining_fraction:remaining,reset_at:new Date(Date.now()+3600000).toISOString(),source:'local_collector',confidence:'provider_reported'}))}));
+    remaining_fraction:remaining,reset_at:new Date(Date.now()+3600000).toISOString(),source:'local_collector',confidence:'provider_reported'}))}),'db-fixture-key-5');
   const request=jobRequest.parse({repository:'pool-repo',prompt:'Fixture'});
   expect((await store.planTask({...request,model_class:'reasoning'})).selected).toBeNull();
   await store.submitJob(request,'pool-idempotency-fixture');

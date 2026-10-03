@@ -3,8 +3,9 @@ import { z } from 'zod';
 import { connectSql } from '@llm-usage/db';
 import { decideExecution, type TaskSpec, type JobRequest, type ExecutionAccount, type ExecutionTarget,
   type TargetRegistration, type Continuation, targetHealth } from '@llm-usage/core';
-import { getStatus, getPolicy, ingest } from './store';
-import { ingestSnapshot } from '@llm-usage/core';
+import { getPolicy } from './store';
+import { getLiveStatus } from './observe';
+import { credentialFiles } from './sessions';
 
 export class ExecutionError extends Error {
   constructor(public code: string, public status = 409) { super(code); }
@@ -29,8 +30,8 @@ export async function listExecutionAccounts() {
   return using(async sql => {
     const accounts = await sql<{id:string;provider:string;label:string;account_type:string;enabled:boolean}[]>`SELECT id, provider, label, account_type, enabled FROM accounts ORDER BY id`;
     const targets = await sql`SELECT registration, health, observed_at, cooldown_until FROM execution_targets ORDER BY id`;
-    const usage=await getStatus();
-    return { accounts:accounts.map(account=>({...account,usage:usage.accounts.find(a=>a.id===account.id)??null})), targets };
+    const usage=await getLiveStatus();
+    return { accounts:accounts.map(account=>({...account,usage:usage.accounts.find(a=>a.id===account.id)??null})), targets, observations:usage.observations };
   });
 }
 export async function registerAccount(input: { id: string; provider: string; label: string; account_type: string }) {
@@ -58,7 +59,7 @@ export async function registerTarget(registration: TargetRegistration) {
 }
 async function snapshot(sql: Sql, request: TaskSpec) {
   const [{ accounts: states }, policy, types, targets, active] = await Promise.all([
-    getStatus(), getPolicy(), sql`SELECT id,account_type FROM accounts`,
+    getLiveStatus(), getPolicy(), sql`SELECT id,account_type FROM accounts`,
     sql`SELECT * FROM execution_targets`,
     sql`SELECT account_id FROM execution_jobs WHERE state IN ('running','needs_review')`,
   ]);
@@ -160,12 +161,16 @@ export async function finishJob(worker: string, id: string, lease: string, resul
   });
 }
 
-export async function reportUsage(worker: string, input: z.infer<typeof ingestSnapshot>) {
+/** Hand a worker the access material for an account it serves. Refresh tokens never leave the service. */
+export async function workerCredentials(worker: string, accountId: string, platform: 'linux' | 'darwin') {
   return using(async sql => {
-    const [target] = await sql`SELECT id FROM execution_targets WHERE account_id=${input.account_id} AND registration->>'worker_id'=${worker} LIMIT 1`;
+    const [target] = await sql`SELECT id FROM execution_targets WHERE account_id=${accountId} AND registration->>'worker_id'=${worker} LIMIT 1`;
     if (!target) throw new ExecutionError('target_not_owned',403);
-    if (Math.abs(Date.now()-Date.parse(input.observed_at))>86_400_000) throw new ExecutionError('observation_outside_24h',400);
-    return { result: await ingest(input,createHash('sha256').update(JSON.stringify(input)).digest('hex')) };
+    try { return await credentialFiles(accountId, platform); }
+    catch (error) {
+      const code = error instanceof Error ? error.message : 'credentials_unavailable';
+      throw new ExecutionError(code === 'session_missing' || code === 'usage_auth_required' ? 'provider_session_required' : 'credentials_unavailable', code === 'session_missing' || code === 'usage_auth_required' ? 409 : 503);
+    }
   });
 }
 export async function resolveJob(id: string, result: z.infer<typeof workerResult>) {

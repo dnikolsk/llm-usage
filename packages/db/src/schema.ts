@@ -26,3 +26,10 @@ export const routingPolicies = pgTable('routing_policies', {
   isDefault:boolean('is_default').notNull().default(false), configuration:jsonb('configuration_json').$type<Record<string,unknown>>().notNull().default({}),
   createdAt:timestamp('created_at',{withTimezone:true}).notNull().defaultNow(),updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow()
 });
+/** Provider logins held by the service; `sealed` is AES-256-GCM ciphertext under LLM_SESSION_KEY, which never enters the database. */
+export const providerSessions = pgTable('provider_sessions', {
+  accountId:text('account_id').primaryKey().references(()=>accounts.id), provider:text('provider').notNull(), sealed:text('sealed').notNull(),
+  expiresAt:timestamp('expires_at',{withTimezone:true}), connectedAt:timestamp('connected_at',{withTimezone:true}).notNull().defaultNow(),
+  refreshedAt:timestamp('refreshed_at',{withTimezone:true}), status:text('status').notNull().default('connected'), failureCode:text('failure_code'),
+  updatedAt:timestamp('updated_at',{withTimezone:true}).notNull().defaultNow()
+});

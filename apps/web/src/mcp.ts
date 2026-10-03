@@ -8,9 +8,9 @@ export function createMcpServer() {
     try { return {content:[{type:'text' as const,text:JSON.stringify(await fn())}]}; }
     catch (error) { return {isError:true,content:[{type:'text' as const,text:error instanceof ExecutionError ? error.code : 'service_unavailable'}]}; }
   };
-  server.registerTool('list_accounts',{description:'List accounts, execution targets, measured usage buckets, reset times, freshness and collection diagnostics. Registration does not mean logged in; missing usage is unknown.',
+  server.registerTool('list_accounts',{description:'List accounts, execution targets, and usage read live from each connected provider at call time (shared within a 20-second window): buckets, reset times, freshness and diagnostics. Missing usage is unknown, never full.',
     inputSchema:{},annotations:{readOnlyHint:true}},()=>wrap(listExecutionAccounts));
-  server.registerTool('plan_task',{description:'Explain each routing step: explicit provider/account, scope, login, billing, existing work, setup, remaining quota, and reset time. Does not execute.',
+  server.registerTool('plan_task',{description:'Explain each routing step using live provider usage: explicit provider/account, scope, login, billing, existing work, setup, remaining quota, and reset time. Does not execute.',
     inputSchema:taskSpec,annotations:{readOnlyHint:true}},input=>wrap(()=>planTask(input)));
   server.registerTool('submit_task',{description:'Queue an authorized coding task. Can edit repositories through an official CLI. Reuse the same idempotency_key for retries. No paid API fallback; no automatic replay after uncertain execution.',
     inputSchema:jobRequest.extend({idempotency_key:z.string().regex(/^[a-zA-Z0-9_-]{16,128}$/)}),

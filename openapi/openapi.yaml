@@ -8,8 +8,14 @@ servers:
 paths:
   /v1/status:
     get:
-      summary: All configured accounts and their latest successful buckets
+      summary: All configured accounts with usage read live from each connected provider
+      description: By default the service calls every connected provider now (readings within 20 seconds are shared) before projecting status. `fresh=0` returns the stored projection without contacting providers.
       security: [{readToken: []}]
+      parameters:
+        - name: fresh
+          in: query
+          required: false
+          schema: {type: string, enum: ['0', '1'], default: '1'}
       responses:
         '200':
           description: Status, including freshness and latest health
@@ -49,7 +55,8 @@ paths:
         '401': {$ref: '#/components/responses/Unauthorized'}
   /v1/ingest:
     post:
-      summary: Append a complete observation for a provisioned account
+      summary: Retired for real telemetry. The service reads usage live from its own provider sessions; only simulated observations with metadata.demo=true are accepted.
+      deprecated: true
       security: [{writeToken: []}]
       parameters:
         - name: Idempotency-Key
@@ -62,11 +69,12 @@ paths:
           application/json:
             schema: {$ref: '#/components/schemas/Snapshot'}
       responses:
-        '201': {description: Created}
-        '200': {description: Identical retry}
+        '201': {description: Demo observation created}
+        '200': {description: Identical demo retry}
         '400': {description: Invalid payload}
         '404': {description: Account not provisioned or provider mismatch}
         '409': {description: Idempotency key reused for a different payload}
+        '410': {description: Real telemetry is no longer accepted; connect the provider at /connect instead}
         '401': {$ref: '#/components/responses/Unauthorized'}
 components:
   securitySchemes:

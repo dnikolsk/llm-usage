@@ -52,6 +52,16 @@ export async function getStatus(now=new Date()) {
   } finally { await client.end(); }
 }
 
+/** Newest observation per account (any status), used to decide whether a live read is due. */
+export async function latestObservations() {
+  const {db,client}=connect();
+  try {
+    const latest=await db.selectDistinctOn([usageSnapshots.accountId]).from(usageSnapshots)
+      .orderBy(usageSnapshots.accountId,desc(usageSnapshots.observedAt),desc(usageSnapshots.ingestedAt));
+    return new Map(latest.map(s=>[s.accountId,{observedAt:s.observedAt,status:s.status}]));
+  } finally { await client.end(); }
+}
+
 export async function getPolicy():Promise<RoutePolicy> {
   const {db,client}=connect();
   try {

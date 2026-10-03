@@ -2,6 +2,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { createMcpServer } from '../../src/mcp';
 import { access, limitedBody, json, failure } from '../../src/execution-http';
 export const runtime = 'nodejs';
+export const maxDuration = 30;
 export async function POST(request: Request) {
   if (!access(request,'job')) return json({error:'unauthorized'},401);
   const origin = request.headers.get('origin');

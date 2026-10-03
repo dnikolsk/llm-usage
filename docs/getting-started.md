@@ -17,7 +17,7 @@ This path uses simulated Claude usage and does not sign into a provider or execu
    cp apps/web/.env.example apps/web/.env.local
    ```
 
-2. Edit `.env.local`. Set `DATABASE_URL` to your actual connection URI, such as `postgresql://YOUR_DB_USER:YOUR_DB_PASSWORD@127.0.0.1:5432/llm_usage_demo`. Configure independent random `READ_TOKEN`, `WRITE_TOKEN` and `DASHBOARD_PASSWORD` values, each at least 32 characters. Your password manager can generate and store them. Execution secrets can stay unconfigured until the worker steps below; the example values are placeholders, never deployment credentials.
+2. Edit `.env.local`. Set `DATABASE_URL` to your actual connection URI, such as `postgresql://YOUR_DB_USER:YOUR_DB_PASSWORD@127.0.0.1:5432/llm_usage_demo`. Configure independent random `READ_TOKEN`, `WRITE_TOKEN` and `DASHBOARD_PASSWORD` values, each at least 32 characters, and a 64-hex `LLM_SESSION_KEY` (`openssl rand -hex 32`) so provider logins can be stored. Your password manager can generate and store them. Execution secrets can stay unconfigured until the worker steps below; the example values are placeholders, never deployment credentials.
 
 3. Load the trusted local file into this shell and migrate/seed:
 
@@ -73,15 +73,7 @@ The generated `worker.json` starts with `billing: "unknown"`, refuses to overwri
 
 ### Sign in, confirm billing and register
 
-Run only the commands for accounts retained in your config:
-
-```sh
-pnpm --filter @llm-usage/collector connect /absolute/path/worker-state/worker.json codex-personal
-pnpm --filter @llm-usage/collector connect /absolute/path/worker-state/worker.json claude-personal-main
-pnpm --filter @llm-usage/collector connect /absolute/path/worker-state/worker.json cursor-personal
-```
-
-Complete the provider's owner approval. The [phone Claude helper](execution.md#prepared-personal-accounts) provides a private HTTPS code handoff when needed. Provider sessions stay on the worker; copying passwords into a secret manager does not replace these sign-ins. On macOS, Cursor's file store is shared by the OS user: use one Cursor identity per OS login.
+Register first (below) so the accounts exist, then sign in to the running dashboard, open `/connect` and connect each account by completing the provider's sign-in in your browser (Claude: paste the code; Codex: paste the `localhost` address the browser lands on; Cursor: just continue). The service keeps the login; the worker will fetch access tokens from it. Nothing is signed in on the worker machine. On macOS, Cursor's issued credential is written to the OS user's `~/.cursor/auth.json`, so use one Cursor identity per OS login.
 
 Verify included subscription access and provider overage settings. Set each verified target's `billing` to `subscription`; keep unverified targets `unknown`. There is no automatic paid fallback. Then load `ADMIN_TOKEN` temporarily from your secret manager and register:
 
@@ -93,11 +85,10 @@ unset ADMIN_TOKEN
 In a dedicated worker shell/supervisor, inject only its `WORKER_WORKER_1_TOKEN` and required OS settings, then run:
 
 ```sh
-pnpm --filter @llm-usage/collector usage:sync /absolute/path/worker-state/worker.json
 pnpm --filter @llm-usage/collector worker /absolute/path/worker-state/worker.json
 ```
 
-Do not source the web service's entire environment into the worker: it does not need database, admin, dashboard or bot credentials. The worker publishes health and quota itself; `WRITE_TOKEN` is not needed. Keep the process running and supervise one instance per worker. See [operations](deployment.md#operate-and-upgrade).
+Do not source the web service's entire environment into the worker: it does not need database, admin, dashboard or bot credentials. The worker publishes health and fetches access tokens with its own token; usage is read by the service. Keep the process running and supervise one instance per worker. See [operations](deployment.md#operate-and-upgrade).
 
 ## Submit your first task
 

@@ -1,6 +1,6 @@
 # LLM Usage
 
-Self-hosted subscription usage monitoring and coding-task orchestration for Claude Code, Codex and Cursor. View remaining allowance and reset times, ask an explainable router to choose an account, and submit repository tasks through MCP or HTTP. Workers run the providers' CLIs and return patches for review.
+Self-hosted subscription usage monitoring and coding-task orchestration for Claude Code, Codex and Cursor. Connect each provider once in the dashboard; the service then reads remaining allowance and reset times live from the providers on every view, routes work with an explainable planner, and submits repository tasks through MCP or HTTP. Workers receive short-lived access tokens from the service, run the providers' CLIs and return patches for review.
 
 This is a **single-owner system**, not a multi-user hosted service. Each operator deploys their own instance and authorizes their own provider accounts. CLI execution and telemetry depend on the provider's current authentication, subscription and endpoint behavior.
 
@@ -26,26 +26,28 @@ flowchart LR
   Worker --> Repo[Isolated task clones and patches]
 ```
 
-The web service owns usage history, routing and the job queue. Workers own provider sessions and execution. A worker may run on a cloud VM: `execution: local` means a CLI running on that worker, not necessarily on your laptop. `execution: cloud` means a provider-hosted coding environment.
+The web service owns provider sessions (encrypted), live usage reads, routing and the job queue. Workers own execution only: they fetch access tokens from the service before each check and task. A worker may run on a cloud VM: `execution: local` means a CLI running on that worker, not necessarily on your laptop. `execution: cloud` means a provider-hosted coding environment.
 
 | Capability | Current support |
 | --- | --- |
-| Usage dashboard | Password protected, phone-friendly, refreshes once a minute; display timezone is Eastern Time |
-| Quotas and resets | Codex CLI rate limits; Claude and Cursor authenticated telemetry, with freshness and diagnostics |
+| Usage dashboard | Password protected, phone-friendly; every view reads the providers live (20-second shared window); display timezone is Eastern Time |
+| Quotas and resets | Claude, Codex and Cursor authenticated telemetry read by the service from its own provider sessions, with freshness and diagnostics |
+| Provider sign-in | Once per provider at `/connect`; workers never log in themselves |
 | Worker CLI execution | Claude, Codex and Cursor |
 | Provider-hosted execution | Codex adapter; requires your configured provider environment and repository |
 | MCP | Authenticated Streamable HTTP at `/mcp`; configurable bearer headers required, no OAuth discovery |
 | Results | Git patches and job status; no automatic PR creation or deployment |
 | Paid API fallback | Not implemented; unavailable subscription capacity does not authorize paid usage |
 
-Claude/Cursor telemetry endpoints are not guaranteed public APIs. Unknown capacity stays unknown; provider behavior and a real-machine acceptance test determine readiness. See [provider support](docs/providers.md) and [execution limitations](docs/execution.md#runtime-and-results).
+Provider telemetry endpoints are not guaranteed public APIs. Unknown capacity stays unknown; provider behavior and a real-machine acceptance test determine readiness. See [provider support](docs/providers.md) and [execution limitations](docs/execution.md#runtime-and-results).
 
 ## Repository layout
 
 | Path | Purpose |
 | --- | --- |
 | `apps/web` | Dashboard, usage API, execution API and MCP server |
-| `collector` | Provider connection/usage adapters, worker and enrollment CLI |
+| `collector` | Worker: official CLI execution with service-issued access tokens |
+| `packages/providers` | Provider enrollment, refresh, live usage readers and CLI credential formats |
 | `packages/core` | Validated contracts and routing logic |
 | `packages/db` | PostgreSQL schema and ordered migrations |
 | `config` | Nonsecret configuration examples; replace all placeholder paths |
