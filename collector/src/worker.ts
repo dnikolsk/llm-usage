@@ -1,17 +1,16 @@
-import { readFile, mkdir, writeFile, realpath, symlink } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, mkdir, writeFile, realpath, symlink, rename } from 'node:fs/promises';
+import { join, dirname, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { spawn } from 'node:child_process';
 import { workerConfig, command, type Target } from './providers/types';
 import * as codex from './providers/codex/index';
-import {collectUsage} from './usage';
-import {createUsageMirror} from './usage-mirror';
 import {executionModel} from './execution-model';
 import * as claude from './providers/claude/index';
 import * as cursor from './providers/cursor/index';
 const config=workerConfig.parse(JSON.parse(await readFile(process.argv[2]??'', 'utf8')));
+if(config.usage_mirror!==undefined)console.error('worker.json: usage_mirror is retired and ignored; the service reads usage from its own provider sessions.');
 const token=process.env[config.token_env];
 if(!token||token.length<32)throw new Error('worker_token_required');
-const mirrorUsage=createUsageMirror(config);
 const service=new URL(config.service_url);
 if(service.protocol!=='https:' && !(service.protocol==='http:'&&['localhost','127.0.0.1','[::1]'].includes(service.hostname)))throw new Error('https_required');
 async function api(path:string,body:unknown):Promise<any>{
@@ -20,25 +19,40 @@ async function api(path:string,body:unknown):Promise<any>{
 }
 const adapter=(target:Target)=>target.provider==='openai'?codex:target.provider==='anthropic'?claude:cursor;
 const sleep=(ms:number)=>new Promise(r=>setTimeout(r,ms));
-const usageChecked=new Map<string,number>();
-// Included-usage permission is separate from percentages. Never assume it after a restart.
-const usageDenied=new Set<string>(config.targets.filter(t=>t.provider==='openai').map(t=>t.account_id));
+/** Access material comes from the service's provider session; this worker never holds a refresh token or logs in itself. */
+const credentialsUntil=new Map<string,number>();
+const credentialMarginMs=30*60_000;
+let sessionWarned=new Set<string>();
+async function ensureCredentials(target:Target){
+  const until=credentialsUntil.get(target.account_id);
+  if(until!==undefined&&until-Date.now()>credentialMarginMs)return true;
+  let issued:{expires_at:string|null;files:{path:string;content:string}[]};
+  try{issued=await api('credentials',{account_id:target.account_id,platform:process.platform==='darwin'?'darwin':'linux'});}
+  catch(error){
+    const message=error instanceof Error?error.message:'';
+    if(message==='service_409'){if(!sessionWarned.has(target.account_id)){sessionWarned.add(target.account_id);console.error(`No provider session for ${target.account_id}; connect it in the dashboard at /connect.`);}credentialsUntil.delete(target.account_id);return false;}
+    throw error;
+  }
+  for(const file of issued.files){
+    const path=file.path.startsWith('~/')?join(homedir(),file.path.slice(2)):resolve(target.auth_dir,file.path);
+    if(!file.path.startsWith('~/')&&!path.startsWith(target.auth_dir+'/'))throw new Error('credential_path_rejected');
+    await mkdir(dirname(path),{recursive:true,mode:0o700});
+    const temporary=`${path}.${process.pid}.tmp`;
+    await writeFile(temporary,file.content,{mode:0o600});await rename(temporary,path);
+  }
+  sessionWarned.delete(target.account_id);
+  // Re-fetch before the token lapses; a token without a stated lifetime is re-fetched hourly.
+  credentialsUntil.set(target.account_id,issued.expires_at?Date.parse(issued.expires_at):Date.now()+credentialMarginMs+3_600_000);
+  return true;
+}
 let stopping=false;
 let activeAbort:AbortController|undefined;
 for(const signal of ['SIGINT','SIGTERM'] as const)process.on(signal,()=>{stopping=true;activeAbort?.abort();});
 async function health(target:Target){
   const supported=target.mode==='local'||target.provider==='openai';
   let ready=false;
-  try{ready=supported&&await adapter(target).authenticated(command(target));}catch{}
-  if(ready&&Date.now()-(usageChecked.get(target.account_id)??0)>60_000){
-    const usage=await collectUsage(target);
-    usageChecked.set(target.account_id,Date.now()+(usage.snapshot.metadata.diagnostic_code==='usage_rate_limited'?240_000:0));
-    if(usage.allowed===false)usageDenied.add(target.account_id);else if(usage.allowed===true)usageDenied.delete(target.account_id);
-    // Publish to the dashboard before the control service: an unreachable control host must not hide usage.
-    await mirrorUsage(usage.snapshot);
-    await api('usage',usage.snapshot);
-  }
-  await api('health',{target_id:target.id,health:!ready?(supported?'needs_login':'unavailable'):usageDenied.has(target.account_id)?'unavailable':'ready'});
+  try{ready=supported&&await ensureCredentials(target)&&await adapter(target).authenticated(command(target));}catch{}
+  await api('health',{target_id:target.id,health:!ready?(supported?'needs_login':'unavailable'):'ready'});
   return ready;
 }
 async function git(args:string[],cwd?:string):Promise<string>{
@@ -67,6 +81,7 @@ async function execute(job:any,target:Target){
   try{
     await mkdir(dir,{recursive:true,mode:0o700});
     if(job.account_id!==target.account_id)throw new Error('account_configuration_mismatch');
+    if(!await ensureCredentials(target))throw new Error('provider_session_required');
     const repo=target.repositories[job.request.repository];if(!repo)throw new Error('repository_unavailable');
     let workspace=join(dir,'workspace');
     if(job.continuation_session){
@@ -121,7 +136,7 @@ async function execute(job:any,target:Target){
 }
 await mkdir(config.artifact_dir,{recursive:true,mode:0o700});
 for(const target of config.targets)await mkdir(target.auth_dir,{recursive:true,mode:0o700});
-console.log(`Worker ${config.worker_id} started; provider credentials stay on this machine.`);
+console.log(`Worker ${config.worker_id} started; access tokens are issued by the service and stored only in this worker's auth directories.`);
 while(!stopping){
   try{
     for(const target of config.targets)await health(target);

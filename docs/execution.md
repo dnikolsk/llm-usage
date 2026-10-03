@@ -22,21 +22,10 @@ From the repository root:
 
 ```sh
 pnpm --filter @llm-usage/collector register /absolute/path/worker.json
-pnpm --filter @llm-usage/collector connect /absolute/path/worker.json codex-personal
-pnpm --filter @llm-usage/collector connect /absolute/path/worker.json cursor-personal
-pnpm --filter @llm-usage/collector connect /absolute/path/worker.json claude-personal-main
 pnpm --filter @llm-usage/collector worker /absolute/path/worker.json
 ```
 
-Do not run interactive `connect` as part of a service restart. Codex exposes an official device code usable from a phone. Cursor prints an official browser link with `NO_OPEN_BROWSER=1`. Claude's CLI may ask for an authorization-code handoff. For phone-only Claude connection, route a private HTTPS origin to port 8787 on the worker, then run:
-
-```sh
-LOGIN_PUBLIC_URL=https://YOUR_WORKER_ORIGIN pnpm --filter @llm-usage/collector connect:web /absolute/path/worker.json claude-personal-main
-```
-
-Open the generated one-time link on the phone, follow Claude sign-in, and paste the returned code into that page. It expires after ten minutes. The worker passes the code directly to its CLI's stdin, without storing it in the service or forwarding it through bot chat. This requires an actual HTTPS endpoint; a localhost link is not usable from a phone. Tailscale Serve on a deployed worker can provide private HTTPS. The page helper and its origin/single-use checks are tested; a real phone authorization still requires the owner.
-
-Phone links use an inline HTML response and a `.html` path. The form includes an independent, single-use verification value, so an embedded browser may omit provenance headers or send an opaque `Origin: null`. Explicitly conflicting origins, referrers, cross-site fetch metadata, and missing/invalid form values are rejected. Keep `LOGIN_PUBLIC_URL` equal to the actual public HTTPS origin, including a non-default port such as 8443. After updating or restarting the connection helper, use its new link and a fresh Claude authorization code; old pages and codes belong to the previous login attempt.
+Workers do not sign in. Connect each provider account once from the deployed dashboard at `/connect` (dashboard password required): the page starts the provider's own PKCE flow, you approve it in your browser and paste back what the provider shows (Claude: a code; Codex: the loopback address the browser lands on; Cursor: nothing, the page polls for completion). The service stores the grant sealed with `SESSION_KEY`, reads usage from it live, and issues short-lived access tokens to the worker over `POST /v1/execution/worker/credentials`. The worker writes them into the account's `auth_dir` in the CLI's own format, without refresh material, before every readiness check and task, and re-fetches 30 minutes before expiry (hourly when no expiry is stated). If no session is connected, the worker reports `needs_login` and logs where to connect; nothing is retried blindly. `connect` remains available as a manual, worker-local fallback for a CLI that cannot use issued credentials; it is not part of normal operation.
 
 The worker requires an administrator-confirmed `billing: "subscription"` target before it can receive a task. Keep billing `unknown` until the account's included allowance and extra-usage settings are verified. Disable provider overage/automatic credits if additional spending must always require permission; login alone does not prove that setting. Re-register to update the target after verification. API-key credentials inherited from the host are deliberately not passed to provider clients. No paid API fallback or credit purchase is implemented: planning reports approval required and tasks remain queued.
 
@@ -44,13 +33,7 @@ The worker requires an administrator-confirmed `billing: "subscription"` target 
 
 Cursor's `status --format json` can return `isAuthenticated: true` when stored tokens exist even if fetching the user from the server fails. The worker therefore also runs the official `models` command and requires a successful available-model list before reporting readiness. This checks backend authentication without running an inference task. A network failure or an account with no available models also prevents readiness; this check does not prove remaining subscription allowance.
 
-For stale or rejected tokens, pause the worker while idle, then reconnect the configured account from the repository root using the same worker configuration:
-
-```sh
-pnpm --filter @llm-usage/collector connect /absolute/path/worker.json cursor-personal --reconnect
-```
-
-This runs official Cursor logout and login in that account's configured credential directory, prints the phone browser link, then checks backend model access. It does not modify Claude or Codex credentials or use an API key. Complete the new browser flow, wait for `Cursor backend accepted the login and returned available models.`, then restart the worker. If verification still fails, investigate the Cursor service/network and CLI version rather than copying tokens or treating local status as success. Existing uncertain jobs still require review; reconnecting does not replay them.
+For stale or rejected tokens, open `/connect` and choose **Sign in again** for the Cursor account; the worker picks up the new access token at its next check. If backend verification still fails afterwards, investigate the Cursor service/network and CLI version rather than copying tokens or treating local status as success. Existing uncertain jobs still require review; reconnecting does not replay them.
 
 ## Step-by-step decision
 
@@ -66,19 +49,11 @@ This runs official Cursor logout and login in that account's configured credenti
 
 Every stage returns its explanation and surviving targets. Candidates include exclusions, evidence quality, each usage bucket, remaining capacity, UTC reset times and seconds left. Expected task duration flags a reset during the task but never assumes replenishment. Passed resets turn old measurements into unknown data. Previously observed exhaustion remains binding until its reported reset; Codex additionally uses the provider's explicit included-usage permission.
 
-Codex usage is read through the official CLI app-server `account/rateLimits/read`, with percentages and epoch reset timestamps normalized into the existing snapshot contract. It never reads OAuth tokens or treats paid credit balances as included allowance. Claude and Cursor are collected on the worker too. Claude reads `/api/oauth/usage` for five-hour, seven-day and provider-reported model-specific utilization/reset windows. Cursor reads `DashboardService/GetCurrentPeriodUsage` and `GetPlanInfo` for included allowance, Auto/named-model breakdowns, and the included-allowance reset when provided (otherwise the provider's current period end). Dollar-denominated included usage stays in cents; percentages are not represented as token counts. Neither extra Claude usage nor Cursor on-demand spend expands subscription capacity. Paid telemetry is published separately as described below.
+Usage is read by the service, live, from the provider sessions connected at `/connect`; see [providers](providers.md) for the exact endpoints. Claude reads `/api/oauth/usage` for five-hour, seven-day and model-specific windows plus the extra-usage budget. Codex reads the ChatGPT backend usage endpoint the CLI itself uses for primary/secondary windows and credits. Cursor reads `DashboardService/GetCurrentPeriodUsage` and `GetPlanInfo` for included allowance, Auto/named-model breakdowns and the included-allowance reset when provided. Dollar-denominated included usage stays in cents; percentages are not represented as token counts. Neither extra Claude usage nor Cursor on-demand spend expands subscription capacity. Paid telemetry is published separately as described below.
 
-These two adapters use the authenticated telemetry endpoints used by the installed provider clients, not a guaranteed public API. Their response contracts are validated; changed schemas, denied access and unavailable credential stores produce explicit diagnostic codes instead of invented capacity. Credentials are read only from the configured account's local CLI store and sent only to fixed provider HTTPS origins, with redirects disabled. They are never forwarded to this service. CLI login continues to own credentials: the collectors never copy them elsewhere. One exception keeps Claude telemetry alive on a worker whose Claude CLI only runs during tasks: when the stored Claude access token has expired, the collector exchanges the CLI's own stored refresh token at the CLI's token endpoint (`console.anthropic.com/v1/oauth/token`, the public Claude Code client) and writes the rotated session back to the same `.credentials.json` with mode `0600`, exactly as the CLI would. If the CLI refreshes concurrently, its newer session is kept. A rejected refresh reports `usage_auth_required` and changes nothing; it means a new `claude auth login` on the worker is required. Cursor uses the official file credential store: `auth_dir/config/cursor/auth.json` on Linux, and `~/.cursor/auth.json` on macOS. On a Mac, the Cursor file store is shared by that OS user, so use one personal Cursor identity per OS user; do not configure multiple Cursor identities under that login. Claude uses `auth_dir/.credentials.json`. Keychain-only credentials are not extracted; an existing Mac keychain login may require one new browser sign-in into the file store.
+Every dashboard render, `/v1/status` call and MCP `list_accounts`/`plan_task` call observes each connected account at that moment; readings less than 20 seconds old are shared rather than repeated, which keeps bursts within provider rate limits. A session whose access token is within two minutes of expiry is refreshed first, in the service only. Failed reads record an error observation with a safe diagnostic (`usage_auth_required`, `usage_rate_limited`, `usage_schema_unrecognized`, …), keep the last successful reading visible for inspection, and prevent it from being called measured capacity. A rejected refresh marks the session **Sign in again** on `/connect`. Known exhaustion remains binding until reset. `list_accounts` includes normalized usage, observed/reset times, freshness, the diagnostic and the per-account observation outcome; `plan_task` includes source, confidence and observation time for each applicable bucket. Model scopes are matched to the concrete execution model as described below; the common allowance always applies.
 
-Before claiming a task, the worker refreshes each ready account's telemetry when at least 60 seconds have elapsed, backing off to five minutes after provider throttling. This happens between tasks; a long-running task can leave measurements stale, which the router exposes. Failed refreshes publish an error observation, retain the last successful reading for inspection, and prevent it from being called measured capacity. Known exhaustion remains binding until reset. MCP `list_accounts` now includes normalized usage, observed/reset times, freshness and a safe diagnostic code; `plan_task` includes source, confidence and observation time for each applicable bucket. Model scopes are matched to the concrete execution model as described below; the common allowance always applies.
-
-For live acceptance on the deployed worker, with its existing worker credential loaded and the worker idle:
-
-```sh
-pnpm --filter @llm-usage/collector usage:sync /absolute/path/worker.json
-```
-
-This reads and publishes normalized telemetry for all three accounts, prints no credentials or raw provider responses, and exits nonzero if any collection fails. Then call MCP `list_accounts` and `plan_task`: compare each account's percentage and UTC reset to its provider usage screen. Require real readings for all three before calling telemetry deployment verified. `usage_credentials_missing` means the configured local credential file is absent; `usage_auth_required` means the token expired or the telemetry endpoint denied access; `usage_rate_limited` requires waiting for backoff; other unavailable/schema errors require adapter investigation. Do not reconnect working task authentication merely because a telemetry endpoint denies access. No live provider acceptance is claimed by fixture tests.
+For live acceptance, connect all three providers at `/connect`, then call `GET /v1/status` with `READ_TOKEN` (or MCP `list_accounts`) and compare each account's percentage and UTC reset to its provider usage screen. Require real readings for all three before calling the deployment verified. `usage_auth_required` means the session needs a new sign-in; `usage_rate_limited` means wait; schema diagnostics require adapter investigation. Fixture tests claim no live provider acceptance.
 
 `model_class` is a configured routing label. Local targets map it to a concrete provider model using `models` in worker configuration; it is passed to the CLI. Don't register a model class that the target cannot execute. General provider selection works without a model class.
 
@@ -149,7 +124,7 @@ Deploy while idle: stop the worker, pull, rebuild, restart the web service, and 
 
 ### Compact dashboard
 
-The `/` page uses `DASHBOARD_PASSWORD` cookie sign-in. Set an independent random password of at least 32 characters on first deployment and preserve it during upgrades; there is no public usage view or client-side service token. The screen shows remaining capacity, reset countdowns, worker connectivity and a repository-specific execution plan. Additional buckets, source confidence and diagnostics expand per account. Passed resets, failed collection and stale readings display unknown rather than suggesting restored capacity. Times are Eastern Time. Visible tabs refresh once a minute; this refreshes the view, not the provider collectors.
+The `/` page uses `DASHBOARD_PASSWORD` cookie sign-in. Set an independent random password of at least 32 characters on first deployment and preserve it during upgrades; there is no public usage view or client-side service token. The screen shows remaining capacity, reset countdowns, worker connectivity and a repository-specific execution plan. Additional buckets, source confidence and diagnostics expand per account. Passed resets, failed collection and stale readings display unknown rather than suggesting restored capacity. Times are Eastern Time. Visible tabs refresh once a minute, and every render reads the providers live (shared within a 20-second window). Each account shows whether its provider session is connected (**Live**), needs a new sign-in, or is not connected, linking to `/connect`.
 
 ### Machine setup and worker enrollment ownership
 
@@ -179,24 +154,8 @@ Paid telemetry is stored separately in snapshot `metadata.paid_usage` and expose
 
 Provider-unreported amounts remain unknown, not zero. Malformed optional paid telemetry produces `paid_usage_schema_unrecognized` without discarding valid included quota. Failed/stale observations and passed paid-period resets are shown as needing refresh, with last values identified as historical. No paid fallback or additional spending authorization is added.
 
-Deploy the web and worker code together; while the worker is idle, update/restart it and run `usage:sync` to publish these newly collected fields. Compare paid values and reset dates against each provider's usage screen before claiming live acceptance. No database migration is needed; paid telemetry uses validated snapshot metadata.
+Compare paid values and reset dates against each provider's usage screen before claiming live acceptance.
 
-### A separate Vercel usage dashboard
+### Several dashboards or a private control host
 
-A worker sends usage to its configured `service_url`. If MCP/control runs on a private host and Vercel uses a different database, updating either web deployment does not copy usage between them. Configure the worker to mirror the same normalized snapshots instead of maintaining a second provider scraper:
-
-```json
-"usage_mirror": {
-  "service_url": "https://YOUR_DASHBOARD.vercel.app",
-  "token_env": "WORKER_DASHBOARD_WRITE_TOKEN",
-  "account_ids": {
-    "codex-personal": "chatgpt-personal"
-  }
-}
-```
-
-Add this optional object to the existing worker JSON. `account_ids` maps worker account IDs to existing dashboard account IDs; omit mappings when IDs already agree. Destination accounts must already exist and belong to the matching provider. Inject the dashboard's existing `WRITE_TOKEN` as `WORKER_DASHBOARD_WRITE_TOKEN` through the worker supervisor's secret settings. It must differ from the private worker token. Keep the private control `service_url` and provider profiles intact. No provider credentials, dashboard password or database credentials go to the mirror.
-
-The supervised worker and `usage:sync` both publish complete snapshots to the dashboard's `/v1/ingest`, retaining UTC reset dates, paid telemetry, adapter version and failed-refresh diagnostics. Identical observations have stable idempotency keys. Mirror failures are logged without response bodies and do not stop task execution; `usage:sync` exits unsuccessfully if the mirror rejects a snapshot. Absent provider reset dates stay absent.
-
-During migration, identify and stop the old dashboard publisher so it cannot overwrite current telemetry with newer but incomplete readings. Update the worker while idle, inject the write credential, restart the single supervised instance, and run `usage:sync`. Verify the dashboard's `/v1/status` (using its own `READ_TOKEN`) and private MCP show the same observation time, reset dates and paid amounts. Check a second automatic refresh before declaring the connection healthy. Empty metadata or different bucket IDs on the dashboard identify a different publishing path; a successful private MCP refresh alone is insufficient.
+Usage no longer travels between deployments: each web deployment reads the providers itself from the sessions connected to it. If MCP/control runs on a private host and a public dashboard runs on Vercel, connect the providers on each (two separate grants, each revocable), or point both at one database. Retire any remaining scheduled publisher (cron, launchd, `usage:sync` loops): `/v1/ingest` and `worker/usage` answer `410`, so they can no longer overwrite live readings with stale ones.

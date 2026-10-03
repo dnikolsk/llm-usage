@@ -54,15 +54,13 @@ The wrapper takes variables from the selected role file and basic OS/network set
 
 Follow [Connect a real worker](getting-started.md#connect-a-real-worker) to install CLIs, create a tools manifest, and generate the execution config. Use your Vercel HTTPS origin, `--worker-id worker-1`, and repository keys/paths you actually own. The provider defaults are personal Claude, Codex and Cursor; remove unrequested targets before registration.
 
-Sign into each configured provider using `connect`. This is subscription authentication: it does not require Anthropic/OpenAI/Cursor API keys. The owner approves official browser/device flows. Verify included billing/overage settings before marking targets `subscription`.
+Sign in to your dashboard and open `/connect`. Add each account (same IDs as the worker config) and connect it: the page runs the provider's own sign-in and stores the login in your service, sealed with `SESSION_KEY`. This is subscription authentication: it does not require Anthropic/OpenAI/Cursor API keys, and the worker never logs in itself. Verify included billing/overage settings before marking targets `subscription`.
 
-Register, collect usage and start the worker from the checkout:
+Register and start the worker from the checkout:
 
 ```sh
 pnpm setup:run --file "$HOME/.llm-usage-owner/operator-secrets.json" -- \
   pnpm --filter @llm-usage/collector register /absolute/path/worker-state/worker.json
-pnpm setup:run --file "$HOME/.llm-usage-owner/worker-secrets.json" -- \
-  pnpm --filter @llm-usage/collector usage:sync /absolute/path/worker-state/worker.json
 pnpm setup:run --file "$HOME/.llm-usage-owner/worker-secrets.json" -- \
   pnpm --filter @llm-usage/collector worker /absolute/path/worker-state/worker.json
 ```
