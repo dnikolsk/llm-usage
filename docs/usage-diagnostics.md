@@ -42,6 +42,7 @@ Interpretation:
 | `source_paid_usage_not_reported` | The source supplied no paid records; this is unknown, not zero |
 | `dashboard_account_unavailable` | Missing read access or a missing/mismatched destination account ID |
 | `token_missing`, `http_401`, `http_403` | The service could not be inspected; other report sections may still be useful |
+| `provider_collection_failed` with `usage_auth_required` on a Claude account | The worker's Claude session could not be refreshed from its stored refresh token; run `claude auth login` as the worker user in that account's `auth_dir`. An expired access token alone is refreshed automatically |
 | `worker_config_not_found`, `worker_config_ambiguous` | Discovery could not select one running worker configuration |
 | `worker_config_requires_selection` | Saved configs were found, but none could be selected safely from the available service/process evidence |
 
