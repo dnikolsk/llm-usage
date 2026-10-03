@@ -1,8 +1,14 @@
 import { spawn } from 'node:child_process';
 import { z } from 'zod';
+import {accountId} from '@llm-usage/core';
+const tokenName=z.string().regex(/^[A-Z][A-Z0-9_]+$/);
 export const workerConfig = z.object({
   service_url:z.url(), worker_id:z.string().regex(/^[a-z][a-z0-9_-]{1,79}$/),
-  token_env:z.string().regex(/^[A-Z][A-Z0-9_]+$/),
+  token_env:tokenName,
+  usage_mirror:z.object({
+    service_url:z.url(),token_env:tokenName,
+    account_ids:z.record(accountId,accountId).default({}),
+  }).strict().optional(),
   artifact_dir:z.string().startsWith('/'),
   targets:z.array(z.object({
     id:z.string(), account_id:z.string(), provider:z.enum(['openai','anthropic','cursor']),
