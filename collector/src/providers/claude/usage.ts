@@ -1,9 +1,8 @@
-import {readFile} from 'node:fs/promises';
-import {join} from 'node:path';
 import {z} from 'zod';
 import {ingestSnapshot} from '@llm-usage/core';
 import type {Target} from '../types';
 import {usageJson} from '../usage-http';
+import {accessToken} from './session';
 const bucket=z.object({utilization:z.number().finite().nonnegative(),resets_at:z.iso.datetime({offset:true}).nullable()});
 export function normalizeUsage(raw:unknown,accountId:string,now=new Date()){
   const data=z.record(z.string(),z.unknown()).parse(raw);
@@ -29,9 +28,7 @@ export function normalizeUsage(raw:unknown,accountId:string,now=new Date()){
     status:data.five_hour!=null&&data.seven_day!=null?'ok':'partial',limits,metadata:{adapter_version:'claude-oauth-v2',paid_usage:paid,...(data.extra_usage!=null&&!extra.success?{paid_usage_diagnostic:'paid_usage_schema_unrecognized'}:{})}})};
 }
 export async function readUsage(target:Target){
-  const credentials=z.object({claudeAiOauth:z.object({accessToken:z.string().min(1),expiresAt:z.number().optional()})})
-    .parse(JSON.parse(await readFile(join(target.auth_dir,'.credentials.json'),'utf8'))).claudeAiOauth;
-  if(credentials.expiresAt!==undefined&&credentials.expiresAt<=Date.now())throw new Error('usage_auth_required');
-  const raw=await usageJson('https://api.anthropic.com/api/oauth/usage',{headers:{Authorization:`Bearer ${credentials.accessToken}`,'anthropic-beta':'oauth-2025-04-20'}});
+  const session=await accessToken(target.auth_dir);
+  const raw=await usageJson('https://api.anthropic.com/api/oauth/usage',{headers:{Authorization:`Bearer ${session.token}`,'anthropic-beta':'oauth-2025-04-20'}});
   return normalizeUsage(raw,target.account_id);
 }

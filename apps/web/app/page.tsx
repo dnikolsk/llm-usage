@@ -16,7 +16,7 @@ function Account({account,now,ready}:{account:AccountState;now:Date;ready:boolea
  const warnings=[...new Set([account.usage_diagnostic,account.paid_usage_diagnostic,...account.limits.map(b=>b.metadata.diagnostic_code)].filter((v):v is string=>!!v))];
  const fresh=account.status!=='error'&&account.freshness==='fresh';
  return <article className={`account ${account.provider}`}><header><div className="identity"><span className="provider-mark">{(names[account.provider]??account.provider)[0]}</span><div><h2>{names[account.provider]??account.provider}</h2><span className="account-label">{account.label}</span></div></div><span className={`badge ${ready?'good':''}`}>{ready?'Worker online':'Worker offline'}</span></header>
- <div className="buckets">{buckets.length?buckets.map(b=><Bucket key={b.id} account={account} bucket={b} now={now}/>):<p className="empty">No usage reported yet.</p>}</div>
+ <div className="buckets">{buckets.length?buckets.map(b=><Bucket key={b.id} account={account} bucket={b} now={now}/>):<p className="empty">{account.status==='error'?'Usage and resets not reported by provider.':'No usage reported yet.'}</p>}</div>
  <section className="paid-usage" aria-label="Paid usage and credits"><span className="eyebrow">PAID</span>{account.paid_usage?.length?account.paid_usage.map(p=>{
  const current=paidCurrent(account,p,now);
  return <div key={p.id}><span>{p.label}</span><strong>{!current?'Needs refresh':p.enabled===false?'Disabled':p.unlimited?'Unlimited':p.remaining===null?'Not reported':`${paidAmount(p.remaining,p.unit)} left`}</strong>

@@ -27,7 +27,7 @@ export function primaryBuckets(account:AccountState){
 }
 export function diagnostic(code:string){
  return code==='usage_amount_percentage_conflict'?'Provider dollar totals disagree with percentages. Percentages are shown.':
- code==='usage_auth_required'?'Usage access needs attention.':code==='usage_rate_limited'?'Provider asked us to wait before refreshing.':code.replaceAll('_',' ');
+ code==='usage_auth_required'?'The worker’s provider session expired or was revoked. Usage and resets stay unknown until the worker signs in again.':code==='usage_rate_limited'?'Provider asked us to wait before refreshing.':code.replaceAll('_',' ');
 }
 
 export function paidAmount(value:number|null,unit:string){

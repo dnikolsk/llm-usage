@@ -8,7 +8,7 @@ Provider modules live under `collector/src/providers/<provider>`. Each worker ke
 | Claude Code (`anthropic`) | Supported adapter | Authenticated `/api/oauth/usage`: five-hour, seven-day and model-specific windows | Not implemented |
 | Cursor (`cursor`) | Supported adapter; explicit Auto default | Authenticated `GetCurrentPeriodUsage` and `GetPlanInfo`: included/Auto/API pools | Not implemented |
 
-Claude and Cursor telemetry contracts are not guaranteed public APIs. Authentication failure, unavailable local stores, rate limiting and schema changes produce diagnostics rather than fabricated capacity. Telemetry requests use fixed provider HTTPS origins and do not follow redirects. The collector does not rewrite provider sessions.
+Claude and Cursor telemetry contracts are not guaranteed public APIs. Authentication failure, unavailable local stores, rate limiting and schema changes produce diagnostics rather than fabricated capacity. Telemetry requests use fixed provider HTTPS origins and do not follow redirects. The collector does not copy provider sessions; the only session it writes is an expired Claude access token it refreshes through the CLI's own token endpoint, stored back in place (see [execution](execution.md)).
 
 All supported adapters normalize percentages and preserve provider reset timestamps. A missing reset remains null, and a passed reset requires a new observation. Paid credits, extra usage and on-demand spend do not expand included subscription capacity. Cursor's pool restrictions and conflicting percentage/dollar fields are documented in [model-to-pool routing](execution.md#bind-models-to-usage-pools).
 
