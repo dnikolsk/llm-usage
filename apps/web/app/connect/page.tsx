@@ -14,7 +14,7 @@ function Status({session}:{session:SessionSummary|undefined}){
  return <span className="badge good">Connected{session.refreshed_at?` · renewed ${time(session.refreshed_at)} ET`:` · since ${time(session.connected_at)} ET`}</span>;
 }
 
-export default async function Connect({searchParams}:{searchParams:Promise<{account?:string;error?:string;connected?:string}>}){
+export default async function Connect({searchParams}:{searchParams:Promise<{account?:string;error?:string;connected?:string;removed?:string}>}){
  const jar=await cookies();
  if(!validDashboardSession(jar.get(dashboardCookie)?.value))return <main className="login"><span className="wordmark">◈ USAGE</span><h1>Sign in first</h1><p><a href="/">Go to the dashboard</a> and sign in, then come back to connect providers.</p></main>;
  const query=await searchParams;
@@ -28,6 +28,7 @@ export default async function Connect({searchParams}:{searchParams:Promise<{acco
  {!sessionKeyConfigured()&&<p className="notice">LLM_SESSION_KEY is not configured on the service, so logins cannot be stored. Add a 64-hex-character key to the deployment and redeploy.</p>}
  {query.error&&<p className="notice" role="alert">{enrollmentMessage(query.error)}</p>}
  {query.connected&&<p className="notice good" role="status">{query.connected} is connected. Usage now reads live from the provider.</p>}
+ {query.removed&&<p className="notice good" role="status">{query.removed} was removed.</p>}
  <section className="accounts" aria-label="Provider accounts">{accounts.map(account=>{
   const session=sessions.find(s=>s.account_id===account.id);
   const here=active?.account_id===account.id;
@@ -44,6 +45,7 @@ export default async function Connect({searchParams}:{searchParams:Promise<{acco
     </div>:<div className="actions">
      <form method="post" action={`/connect/${account.id}/start`}><button className="primary">{session?'Sign in again':'Connect'}</button></form>
      {session&&<form method="post" action={`/connect/${account.id}/disconnect`}><button className="quiet">Disconnect</button></form>}
+     {!session&&<form method="post" action={`/connect/${account.id}/remove`}><button className="quiet" title="Only while the account has no session, targets or jobs">Remove</button></form>}
     </div>}
    </div></article>;})}
   {!accounts.length&&<div className="empty">No accounts yet. Add one below, then connect it.</div>}

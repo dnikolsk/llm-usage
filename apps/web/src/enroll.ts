@@ -42,5 +42,8 @@ export function enrollmentMessage(code: string) {
     : code === 'enrollment_input_invalid' ? 'That does not look like a code or redirected address.'
     : code === 'enrollment_expired' ? 'This connection attempt expired. Start again.'
     : code === 'usage_rate_limited' ? 'The provider asked us to wait. Try again in a minute.'
+    : code === 'account_in_use' ? 'That account still has a connected session, an execution target or jobs, so it was not removed. Point the worker at the connected account ID and re-register first.'
+    : code === 'unknown_account' ? 'That account does not exist.'
+    : code === 'provider_unsupported' ? 'This provider is not supported.'
     : `Connection failed (${code.replaceAll('_', ' ')}).`;
 }
