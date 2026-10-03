@@ -10,7 +10,7 @@ const millis=z.union([z.string().regex(/^\d+$/),number]).transform(Number).refin
 const plan=z.object({limit:number.optional(),includedSpend:number.optional(),remaining:number.optional(),totalPercentUsed:number.optional(),
   autoPercentUsed:number.optional(),apiPercentUsed:number.optional(),autoLimit:number.optional(),apiLimit:number.optional(),autoSpend:number.optional(),apiSpend:number.optional()});
 export function normalizeUsage(raw:unknown,accountId:string,now=new Date(),planInfoRaw?:unknown){
-  const data=z.object({billingCycleStart:millis.optional(),billingCycleEnd:millis,planUsage:plan}).parse(raw);
+  const data=z.object({billingCycleStart:millis.optional(),billingCycleEnd:millis,planUsage:plan,spendLimitUsage:z.unknown().optional()}).parse(raw);
   const info=planInfoRaw===undefined?undefined:z.object({planInfo:z.object({includedUsageResetsAt:millis.optional(),includedUsagePeriod:z.union([z.string(),z.number()]).optional()}).optional()}).parse(planInfoRaw).planInfo;
   const reset=info?.includedUsageResetsAt??data.billingCycleEnd;
   const kind=info?.includedUsagePeriod==='WEEKLY'||info?.includedUsagePeriod===2?'weekly':'subscription';
@@ -30,9 +30,13 @@ export function normalizeUsage(raw:unknown,accountId:string,now=new Date(),planI
     used_fraction:Math.min(1,value/100),remaining_fraction:Math.max(0,1-value/100),observed_at:observed,
     window_started_at:data.billingCycleStart===undefined||info?.includedUsageResetsAt!==undefined?null:new Date(data.billingCycleStart).toISOString(),
     reset_at:new Date(reset).toISOString(),source:'local_collector',confidence:'provider_reported'}]);
-  // spendLimitUsage is overage, not subscription capacity. No inferred calendar reset.
+  const spend=z.object({individualLimit:number.nullish(),individualUsed:number.optional(),individualRemaining:number.optional()}).safeParse(data.spendLimitUsage);
+  const paid=spend.success?[{id:'on_demand',label:'On-demand budget',kind:'spending_limit',unit:'usd_cents',
+    limit:spend.data.individualLimit??null,used:spend.data.individualUsed??null,
+    remaining:spend.data.individualRemaining??null,observed_at:observed,reset_at:new Date(data.billingCycleEnd).toISOString()}]:[];
+  // Paid spending limits are not a prepaid wallet or subscription capacity.
   return{allowed:null,snapshot:ingestSnapshot.parse({account_id:accountId,provider:'cursor',observed_at:observed,status:'ok',limits,
-    metadata:{adapter_version:'cursor-dashboard-v1'}})};
+    metadata:{adapter_version:'cursor-dashboard-v2',paid_usage:paid,...(data.spendLimitUsage!=null&&!spend.success?{paid_usage_diagnostic:'paid_usage_schema_unrecognized'}:{})}})};
 }
 export function credentialPath(target:Target,platform:string=process.platform,home=homedir()){
   if(!['linux','darwin'].includes(platform))throw new Error('usage_credential_store_unsupported');

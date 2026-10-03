@@ -29,3 +29,12 @@ export function diagnostic(code:string){
  return code==='usage_amount_percentage_conflict'?'Provider dollar totals disagree with percentages. Percentages are shown.':
  code==='usage_auth_required'?'Usage access needs attention.':code==='usage_rate_limited'?'Provider asked us to wait before refreshing.':code.replaceAll('_',' ');
 }
+
+export function paidAmount(value:number|null,unit:string){
+ if(value===null)return 'Not reported';
+ return unit==='usd_cents'?new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(value/100):`${new Intl.NumberFormat('en-US',{maximumFractionDigits:4}).format(value)} ${unit}`;
+}
+export function paidCurrent(account:AccountState,p:import('@llm-usage/core').PaidUsage,now:Date){
+ const age=+now-Date.parse(p.observed_at);
+ return account.status!=='error'&&Number.isFinite(age)&&age>=-60000&&age<=600000&&(!p.reset_at||Date.parse(p.reset_at)>+now);
+}

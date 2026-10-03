@@ -76,3 +76,20 @@ describe('official CLI boundaries',()=>{
   expect(codex.cloudState('[READY] A task')).toBe('ready');expect(codex.cloudState('some failure')).toBe('unknown');
  });
 });
+
+it('shows Codex paid credits without replenishing exhausted subscription quota',()=>{
+ const credits={hasCredits:true,unlimited:false,balance:'125.5'};
+ const window={usedPercent:100,windowDurationMins:300,resetsAt:null};
+ const result=normalizeUsage({ordinaryUsageAllowed:false,rateLimits:{primary:window,secondary:null,credits},rateLimitsByLimitId:{codex:{primary:window,secondary:null,credits},other:{primary:null,secondary:null,credits}}},'codex-personal');
+ expect(result.snapshot.metadata.paid_usage).toHaveLength(1);
+ expect(result.snapshot.metadata.paid_usage?.[0]).toMatchObject({kind:'balance',unit:'credits',remaining:125.5});
+ expect(result.allowed).toBe(false);expect(result.snapshot.limits[0].remaining_fraction).toBe(0);
+ const bad=normalizeUsage({rateLimits:{primary:window,secondary:null,credits:{hasCredits:true,unlimited:false,balance:'not-a-balance'}}},'codex-personal');
+ expect(bad.snapshot.limits[0].remaining_fraction).toBe(0);expect(bad.snapshot.metadata.paid_usage_diagnostic).toBe('paid_usage_schema_unrecognized');
+});
+
+it('keeps Codex wallet credits when per-model limits omit the wallet',()=>{
+ const window={usedPercent:25,windowDurationMins:300,resetsAt:null};
+ const result=normalizeUsage({rateLimits:{primary:window,secondary:null,credits:{hasCredits:true,unlimited:false,balance:'50'}},rateLimitsByLimitId:{codex:{primary:window,secondary:null}}},'codex-personal');
+ expect(result.snapshot.metadata.paid_usage?.[0].remaining).toBe(50);expect(result.snapshot.limits).toHaveLength(1);
+});

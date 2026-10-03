@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { connect, accounts, usageSnapshots, usageBuckets, routingPolicies } from '@llm-usage/db';
-import { freshness, type AccountState, type IngestSnapshot, type UsageBucket, defaultPolicy, type RoutePolicy } from '@llm-usage/core';
+import { freshness, type AccountState, type IngestSnapshot, type UsageBucket, defaultPolicy, safeMetadata, type RoutePolicy } from '@llm-usage/core';
 
 export async function ingest(snapshot:IngestSnapshot,key:string):Promise<'created'|'duplicate'|'conflict'|'unknown_account'> {
   const {db,client}=connect();
@@ -43,9 +43,10 @@ export async function getStatus(now=new Date()) {
         used:b.used,limit:b.limit,remaining:b.remaining,used_fraction:b.usedFraction,remaining_fraction:b.remainingFraction,
         window_started_at:b.windowStartedAt?.toISOString() ?? null,reset_at:b.resetAt?.toISOString() ?? null,
         observed_at:observed!,source:b.source as UsageBucket['source'],confidence:b.confidence as UsageBucket['confidence'],metadata:b.metadata as UsageBucket['metadata']})) : [];
+      const paid=safeMetadata.safeParse(s?.metadata??{});
       return {id:a.id,provider:a.provider,label:a.label,plan:a.plan,enabled:a.enabled,capabilities:a.capabilities,
         model_classes:a.modelClasses,priority:a.priority,status:n?.status === 'error' ? 'error' : n?.status === 'partial' ? 'partial' : s ? 'available':'unknown',
-        freshness:freshness(observed,now), observed_at:observed, latest_refresh_at:n?.observedAt.toISOString() ?? null,usage_diagnostic:(n?.metadata as {diagnostic_code?:string}|undefined)?.diagnostic_code??null,limits};
+        freshness:freshness(observed,now), observed_at:observed, latest_refresh_at:n?.observedAt.toISOString() ?? null,usage_diagnostic:(n?.metadata as {diagnostic_code?:string}|undefined)?.diagnostic_code??null,paid_usage:paid.success?paid.data.paid_usage??[]:[],paid_usage_diagnostic:paid.success?paid.data.paid_usage_diagnostic??null:null,limits};
     });
     return {generated_at:now.toISOString(),accounts:states};
   } finally { await client.end(); }

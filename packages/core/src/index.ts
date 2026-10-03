@@ -4,7 +4,21 @@ export const utcTimestamp = z.iso.datetime({ offset: false });
 export const provider = z.string().regex(/^[a-z][a-z0-9_-]{1,31}$/);
 export const accountId = z.string().regex(/^[a-z][a-z0-9_-]{1,79}$/);
 export const fraction = z.number().finite().min(0).max(1);
+/** Display-only paid telemetry; never a subscription routing bucket. */
+export const paidUsage = z.object({
+  id:z.string().regex(/^[a-zA-Z0-9._-]{1,120}$/),
+  label:z.string().regex(/^[a-zA-Z0-9 ._/-]{1,80}$/),
+  kind:z.enum(['balance','spending_limit']),unit:z.enum(['usd_cents','credits','tokens']),
+  remaining:z.number().finite().nonnegative().nullable().default(null),
+  used:z.number().finite().nonnegative().nullable().default(null),
+  limit:z.number().finite().nonnegative().nullable().default(null),
+  enabled:z.boolean().nullable().default(null),unlimited:z.boolean().default(false),
+  observed_at:utcTimestamp,reset_at:utcTimestamp.nullable().default(null),
+}).strict();
+export type PaidUsage=z.infer<typeof paidUsage>;
 export const safeMetadata = z.object({
+  paid_usage:z.array(paidUsage).max(8).optional(),
+  paid_usage_diagnostic:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/).optional(),
   demo:z.boolean().optional(), adapter_version:z.string().regex(/^[a-zA-Z0-9._-]{1,32}$/).optional(),
   diagnostic_code:z.string().regex(/^[a-zA-Z0-9._-]{1,64}$/).optional(),
   display_label:z.string().regex(/^[a-zA-Z0-9 ._/-]{1,80}$/).optional()
@@ -46,6 +60,8 @@ export const ingestSnapshot = z.object({
   limits: z.array(usageBucket).max(40),
   metadata: safeMetadata.default({})
 }).strict().superRefine((s, ctx) => {
+  for(const paid of s.metadata.paid_usage??[])if(paid.observed_at!==s.observed_at)ctx.addIssue({code:'custom',message:'Paid observation must match snapshot'});
+  if (s.status === 'error' && s.metadata.paid_usage?.length)ctx.addIssue({code:'custom',message:'Error observations cannot contain paid balances'});
   if (s.status === 'error' && s.limits.length) ctx.addIssue({ code:'custom', message:'Error observations cannot contain limits' });
   if (new Set(s.limits.map(l => l.id)).size !== s.limits.length) ctx.addIssue({code:'custom',message:'Duplicate bucket IDs'});
   for (const l of s.limits) {
@@ -61,6 +77,8 @@ export type AccountState = {
   freshness: 'fresh' | 'stale' | 'seriously_stale' | 'unknown';
   observed_at: string | null; latest_refresh_at: string | null;
   usage_diagnostic?: string | null;
+  paid_usage?: PaidUsage[];
+  paid_usage_diagnostic?: string | null;
   limits: UsageBucket[];
 };
 

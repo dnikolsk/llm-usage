@@ -95,7 +95,7 @@ components:
         observed_at: {type: string, format: date-time}
         source: {enum: [provider_ui, official_api, local_collector, manual, estimated]}
         confidence: {enum: [exact, provider_reported, estimated, unknown]}
-        metadata: {type: object}
+        metadata: {$ref: '#/components/schemas/Metadata'}
     Snapshot:
       type: object
       required: [account_id, provider, observed_at, status, limits]
@@ -105,7 +105,7 @@ components:
         observed_at: {type: string, format: date-time}
         status: {enum: [ok, partial, error]}
         limits: {type: array, items: {$ref: '#/components/schemas/Bucket'}}
-        metadata: {type: object}
+        metadata: {$ref: '#/components/schemas/Metadata'}
     AccountState:
       type: object
       required: [id, provider, label, enabled, capabilities, model_classes, status, freshness, observed_at, latest_refresh_at, limits]
@@ -121,7 +121,36 @@ components:
         freshness: {enum: [fresh, stale, seriously_stale, unknown]}
         observed_at: {type: [string, 'null'], format: date-time}
         latest_refresh_at: {type: [string, 'null'], format: date-time}
+        paid_usage: {type: array, items: {$ref: '#/components/schemas/PaidUsage'}}
+        paid_usage_diagnostic: {type: [string, 'null']}
         limits: {type: array, items: {$ref: '#/components/schemas/Bucket'}}
+    PaidUsage:
+      type: object
+      description: Display-only subscription extra usage or credits; never included routing capacity.
+      required: [id, label, kind, unit, remaining, used, limit, enabled, unlimited, observed_at, reset_at]
+      additionalProperties: false
+      properties:
+        id: {type: string}
+        label: {type: string}
+        kind: {enum: [balance, spending_limit]}
+        unit: {enum: [usd_cents, credits, tokens]}
+        remaining: {type: [number, 'null'], minimum: 0}
+        used: {type: [number, 'null'], minimum: 0}
+        limit: {type: [number, 'null'], minimum: 0}
+        enabled: {type: [boolean, 'null']}
+        unlimited: {type: boolean}
+        observed_at: {type: string, format: date-time}
+        reset_at: {type: [string, 'null'], format: date-time}
+    Metadata:
+      type: object
+      additionalProperties: false
+      properties:
+        demo: {type: boolean}
+        adapter_version: {type: string}
+        diagnostic_code: {type: string}
+        display_label: {type: string}
+        paid_usage_diagnostic: {type: string}
+        paid_usage: {type: array, maxItems: 8, items: {$ref: '#/components/schemas/PaidUsage'}}
     Candidate:
       type: object
       required: [account_id, provider, eligible, exclusions, bottleneck_remaining, usable_capacity, next_reset_at, freshness_seconds, reset_soon, priority]
