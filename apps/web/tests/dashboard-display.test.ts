@@ -23,3 +23,15 @@ it('formats visible reset dates and distinguishes paid dollars from provider cre
  expect(paidCurrent(account,p,now)).toBe(true);expect(paidCurrent({...account,status:'error'},p,now)).toBe(false);
  expect(paidCurrent(account,{...p,observed_at:'2026-10-01T17:00:00Z'},now)).toBe(false);expect(paidCurrent(account,{...p,reset_at:now.toISOString()},now)).toBe(false);
 });
+
+it('formats compact countdowns, reset times and capacity bands for the glance view',async()=>{
+ const {countdown,resetWhen,level}=await import('../src/dashboard-display');
+ expect(countdown(null,now)).toBe('—');expect(countdown(now.toISOString(),now)).toBe('now');
+ expect(countdown('2026-10-01T18:42:00Z',now)).toBe('42m');expect(countdown('2026-10-01T23:12:00Z',now)).toBe('5h 12m');
+ expect(countdown('2026-10-04T22:00:00Z',now)).toBe('3d 4h');
+ expect(resetWhen(null,now)).toBe('');
+ expect(resetWhen('2026-10-01T20:30:00Z',now)).toBe('4:30 PM');
+ expect(resetWhen('2026-10-02T20:30:00Z',now)).toBe('Fri 4:30 PM');
+ expect(resetWhen('2026-10-18T20:30:00Z',now)).toBe('Oct 18');
+ expect([level(null),level(.1),level(.15),level(.3),level(.9)]).toEqual(['unknown','low','low','mid','high']);
+});

@@ -38,3 +38,27 @@ export function paidCurrent(account:AccountState,p:import('@llm-usage/core').Pai
  const age=+now-Date.parse(p.observed_at);
  return account.status!=='error'&&Number.isFinite(age)&&age>=-60000&&age<=600000&&(!p.reset_at||Date.parse(p.reset_at)>+now);
 }
+
+const zone='America/New_York';
+/** Compact countdown for a reset: "42m", "5h 12m", "3d 4h". */
+export function countdown(iso:string|null,now:Date){
+ if(!iso)return '—';
+ const mins=Math.ceil((Date.parse(iso)-+now)/60000);
+ if(mins<=0)return 'now';
+ if(mins<60)return `${mins}m`;
+ if(mins<1440)return `${Math.floor(mins/60)}h ${mins%60}m`;
+ return `${Math.floor(mins/1440)}d ${Math.floor(mins%1440/60)}h`;
+}
+/** When a reset lands, as briefly as is unambiguous: "4:30 PM" today, "Thu 4:30 PM" this week, "Oct 18" later. */
+export function resetWhen(iso:string|null,now:Date){
+ if(!iso)return '';
+ const at=new Date(iso);
+ const day=(d:Date)=>new Intl.DateTimeFormat('en-US',{timeZone:zone,year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+ const clock=new Intl.DateTimeFormat('en-US',{timeZone:zone,hour:'numeric',minute:'2-digit'}).format(at);
+ if(day(at)===day(now))return clock;
+ if(+at-+now<6*86400000)return `${new Intl.DateTimeFormat('en-US',{timeZone:zone,weekday:'short'}).format(at)} ${clock}`;
+ return new Intl.DateTimeFormat('en-US',{timeZone:zone,month:'short',day:'numeric'}).format(at);
+}
+export function clock(d:Date){return new Intl.DateTimeFormat('en-US',{timeZone:zone,hour:'numeric',minute:'2-digit'}).format(d);}
+/** Colour band for remaining capacity. */
+export function level(n:number|null){return n===null?'unknown':n<=.15?'low':n<=.4?'mid':'high';}
